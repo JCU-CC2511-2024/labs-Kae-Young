@@ -137,12 +137,46 @@ typedef struct ui_window {
     int height;
 }   ui_window_T;
 
+void draw_border(ui_window_T w1)    {
+    //draw top border
+    term_move_to(1, 1);
+    printf("+");
+    for (int i = 0; i < w1.width-2; i++)
+    {
+        printf("-");
+    }
+    printf("+");
+
+    //draw bottom border
+    term_move_to(1, w1.height);
+    printf("+");
+    for (int i = 0; i < w1.width-2; i++)
+    {
+        printf("-");
+    }
+    printf("+");
+
+    //draw left border
+    for (int i = 2; i < w1.height; i++)
+    {
+        term_move_to(1, i);
+        printf("|");
+    }
+
+    //draw right border
+    for (int i = 2; i < w1.height; i++)
+    {
+        term_move_to(w1.width, i);
+        printf("|");
+    }
+}
+
 // Draw heading
 void draw_heading(ui_window_T w1) {
     char text[] = "CC2511 Assignment 2";
     int cursor_location = round((w1.width-sizeof(text))/2); //set cursor to middle of window line
     
-    term_move_to(cursor_location,1);
+    term_move_to(cursor_location,2);
     term_set_color(clrGreen, clrBlack);
     printf(text);
 }
@@ -186,7 +220,7 @@ int main(void) {
     irq_set_enabled(UART_IRQ, true);
     uart_set_irq_enables(UART_ID, true, false);
 
-    uart_puts(UART_ID, "Ready for commands...\n");
+    //uart_puts(UART_ID, "Ready for commands...\n");
 
     int x_steps = 0;
 
@@ -198,6 +232,7 @@ int main(void) {
 
     //Draw UI
     draw_heading(w1);
+    draw_border(w1);
 
     while (true) {
         // Wait for input
