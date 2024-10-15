@@ -70,10 +70,7 @@ void on_uart_rx() {
     while (uart_is_readable(UART_ID)) {
         uint8_t ch = uart_getc(UART_ID);
         // Echo back the character received
-        if (uart_is_writable(UART_ID) && myIndex <= 98) {
-            uart_putc(UART_ID, ch);
-        }
-
+        send_ch(ch);
         // Detect character
         switch (ch) {
             // Check if 'Enter' is pressed
@@ -100,6 +97,13 @@ void on_uart_rx() {
                 }
         }
         chars_rxed++;
+    }
+}
+
+// Write character
+void send_ch(char ch)   {
+    if(uart_is_writable(UART_ID))   {
+        uart_putc(UART_ID, ch);
     }
 }
 
