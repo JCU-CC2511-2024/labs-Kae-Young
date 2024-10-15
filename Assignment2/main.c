@@ -68,25 +68,36 @@ volatile bool input_ready = false;
 // RX interrupt handler
 void on_uart_rx() {
     while (uart_is_readable(UART_ID)) {
-        uint8_t ch = uart_getc(UART_ID);               
+        uint8_t ch = uart_getc(UART_ID);
         // Echo back the character received
         if (uart_is_writable(UART_ID) && myIndex <= 98) {
-            uart_putc(UART_ID, ch);            
+            uart_putc(UART_ID, ch);
         }
-        // Check if 'Enter' is pressed
-        if ((ch == '\n') || (ch == '\r')) {  
-            buffer[myIndex] = 0;   
-            uart_puts(UART_ID, "\n");       
-            myIndex = 0;
-            input_ready = true;  
-        } else if (ch == '\177') { // Backspace handling
-            if (myIndex > 0) {
-                myIndex--;
-                buffer[myIndex] = '\000';
-            }
-        } else if (myIndex <= 98) {  // Save the character to buffer
-            buffer[myIndex] = ch;      
-            myIndex++; 
+
+        // Detect character
+        switch (ch) {
+            // Check if 'Enter' is pressed
+            case '\n':                          
+                buffer[myIndex] = 0;
+                uart_puts(UART_ID, "\n");
+                myIndex = 0;
+                input_ready = true;
+                break;
+            case '\r':
+                break;
+            // Backspace handling
+            case '\177':                        
+                if (myIndex > 0) {
+                    myIndex--;
+                    buffer[myIndex] = '\000';
+                }
+                break;
+            // Save the character to buffer
+            default:
+                if (myIndex <= 98)  {           
+                    buffer[myIndex] = ch;      
+                    myIndex++; 
+                }
         }
         chars_rxed++;
     }
@@ -159,7 +170,8 @@ int main(void) {
             
             // Move motor with a delay of 1000 us per step
             step_motor(x_steps, 500);  
-        } else {
+        } 
+        else {
             uart_puts(UART_ID, "Invalid command. Use 'x <steps>'\n");
         }
 
