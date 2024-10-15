@@ -40,6 +40,7 @@
 #include "hardware/irq.h"
 #include <string.h>
 #include "terminal.h"
+#include <math.h>
 
 
 // uart stuff
@@ -64,6 +65,13 @@ static int chars_rxed = 0;
 volatile char buffer [100];
 volatile unsigned int myIndex = 0;
 volatile bool input_ready = false;
+
+// Write character
+void send_ch(char ch)   {
+    if(uart_is_writable(UART_ID))   {
+        uart_putc(UART_ID, ch);
+    }
+}
 
 // RX interrupt handler
 void on_uart_rx() {
@@ -100,12 +108,7 @@ void on_uart_rx() {
     }
 }
 
-// Write character
-void send_ch(char ch)   {
-    if(uart_is_writable(UART_ID))   {
-        uart_putc(UART_ID, ch);
-    }
-}
+
 
 // Initialise pin
 void init_pin(uint pin, bool direction) {
@@ -130,13 +133,14 @@ void step_motor(int steps, int delay_us) {
 ################################################################                                             
 */
 // UI box struct contains height and width information
-// Get box width from b1.width
-// Get box height from b1.height
+// Get box width from box.width
+// Get box height from box.height
 typedef struct box {
     int width;
     int height;
     int x_origin;
     int y_origin;
+    char *header;
 }   box_T;
 
 void clear_ui(box_T b) {
@@ -152,6 +156,19 @@ void clear_ui(box_T b) {
             }
         } 
     }  
+}
+
+// Draw heading
+void draw_heading(box_T b) {
+    //set colour
+    term_set_color(clrGreen, clrBlack);
+
+    int x_cursor_location = round(((b.width-2)-strlen(b.header))/2) + b.x_origin; //set cursor to middle of window horizon
+    int y_cursor_location = b.y_origin + 1; //set cursor to 1 line below top of box
+    
+    term_move_to(x_cursor_location, y_cursor_location);
+    term_set_color(clrGreen, clrBlack);
+    printf(b.header);
 }
 
 void draw_box(box_T b)    {
@@ -189,42 +206,44 @@ void draw_box(box_T b)    {
         term_move_to(b.x_origin + b.width-1, b.y_origin + i);
         printf("|");
     }
-}
 
-// Draw heading
-void draw_heading(box_T b) {
-    //set colour
-    term_set_color(clrGreen, clrBlack);
-
-    char text[] = "CC2511 Assignment 2";
-    int cursor_location = round((b.width-sizeof(text))/2); //set cursor to middle of window horizon
-    
-    term_move_to(cursor_location,2);
-    term_set_color(clrGreen, clrBlack);
-    printf(text);
+    if (b.header != "\0")
+    {
+        draw_heading(b);
+    }
 }
 
 void draw_ui()  {
-    // Set window box
-    box_T b1;    //declare box struct
-    b1.width = 150;          //set box width
-    b1.height = 33;         //set box height
-    b1.x_origin = 1;        //set box x origin
-    b1.y_origin = 1;        //set box y origin
+    // Configure window box
+    box_T win_box;    //declare box struct
+    win_box.width = 150;          //set box width
+    win_box.height = 33;         //set box height
+    win_box.x_origin = 1;        //set box x origin
+    win_box.y_origin = 1;        //set box y origin
+    win_box.header = "CC2511 Assignment 2";
 
-    // Set xyz box
-    box_T b2;
-    b2.width = 50;
-    b2.height = 10;
-    b2.x_origin = 3;
-    b2.y_origin = 4;
+    // Configure xyz box
+    box_T xyz_box;
+    xyz_box.width = round(win_box.width/3);
+    xyz_box.height = 10;
+    xyz_box.x_origin = win_box.width/9;
+    xyz_box.y_origin = 4;
+    xyz_box.header = "Coordinates";
+
+    // Configure options box
+    box_T opt_box;
+    opt_box.width = xyz_box.width;
+    opt_box.height = xyz_box.height;
+    opt_box.x_origin = 2*win_box.width/9 + xyz_box.width;
+    opt_box.y_origin = 4;
+    opt_box.header = "Options";
 
 
     //Draw UI
-    clear_ui(b1);
-    draw_heading(b1);
-    draw_box(b1);
-    draw_box(b2);
+    clear_ui(win_box);
+    draw_box(win_box);
+    draw_box(xyz_box);
+    draw_box(opt_box);
 }
 /*
 ###############################################################
@@ -261,11 +280,11 @@ int main(void) {
     irq_set_enabled(UART_IRQ, true);
     uart_set_irq_enables(UART_ID, true, false);
 
-    //uart_puts(UART_ID, "Ready for commands...\n");
+    uart_puts(UART_ID, "Ready for commands...\n");
 
     int x_steps = 0;
 
-    draw_ui();
+    //draw_ui();
 
     while (true) {
         // Wait for input
