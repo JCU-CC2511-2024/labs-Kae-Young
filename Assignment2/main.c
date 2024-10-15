@@ -126,65 +126,106 @@ void step_motor(int steps, int delay_us) {
 
 /* 
 ################################################################
-                    FUNCTIONS TO DRAW UI
+                FUNCTIONS TO DRAW/CONTROL UI
 ################################################################                                             
 */
-// UI window struct contains height and width information
-// Get window width from w1.width
-// Get window height from w1.height
-typedef struct ui_window {
+// UI box struct contains height and width information
+// Get box width from b1.width
+// Get box height from b1.height
+typedef struct box {
     int width;
     int height;
-}   ui_window_T;
+    int x_origin;
+    int y_origin;
+}   box_T;
 
-void draw_border(ui_window_T w1)    {
+void clear_ui(box_T b) {
+    term_move_to(1,1);
+    term_set_color(clrBlack, clrBlack);
+    for (int i = 0; i < b.height + 1; i++)
+    {
+        for (int j = 0; j < b.width + 1; j++)
+        {
+            printf(" ");
+            if(j == b.width)   {
+                printf(" \r\n");
+            }
+        } 
+    }  
+}
+
+void draw_box(box_T b)    {
+    //set colour
+    term_set_color(clrGreen, clrBlack);
+
     //draw top border
-    term_move_to(1, 1);
+    term_move_to(b.x_origin, b.y_origin);
     printf("+");
-    for (int i = 0; i < w1.width-2; i++)
+    for (int i = 0; i < b.width - 2; i++)
     {
         printf("-");
     }
     printf("+");
 
     //draw bottom border
-    term_move_to(1, w1.height);
+    term_move_to(b.x_origin, b.y_origin + b.height);
     printf("+");
-    for (int i = 0; i < w1.width-2; i++)
+    for (int i = 0; i < b.width - 2; i++)
     {
         printf("-");
     }
     printf("+");
 
     //draw left border
-    for (int i = 2; i < w1.height; i++)
+    for (int i = 1; i < b.height; i++)
     {
-        term_move_to(1, i);
+        term_move_to(b.x_origin, b.y_origin + i);
         printf("|");
     }
 
     //draw right border
-    for (int i = 2; i < w1.height; i++)
+    for (int i = 1; i < b.height; i++)
     {
-        term_move_to(w1.width, i);
+        term_move_to(b.x_origin + b.width-1, b.y_origin + i);
         printf("|");
     }
 }
 
 // Draw heading
-void draw_heading(ui_window_T w1) {
+void draw_heading(box_T b) {
+    //set colour
+    term_set_color(clrGreen, clrBlack);
+
     char text[] = "CC2511 Assignment 2";
-    int cursor_location = round((w1.width-sizeof(text))/2); //set cursor to middle of window line
+    int cursor_location = round((b.width-sizeof(text))/2); //set cursor to middle of window horizon
     
     term_move_to(cursor_location,2);
     term_set_color(clrGreen, clrBlack);
     printf(text);
 }
 
-void draw_box() {
+void draw_ui()  {
+    // Set window box
+    box_T b1;    //declare box struct
+    b1.width = 150;          //set box width
+    b1.height = 33;         //set box height
+    b1.x_origin = 1;        //set box x origin
+    b1.y_origin = 1;        //set box y origin
 
+    // Set xyz box
+    box_T b2;
+    b2.width = 50;
+    b2.height = 10;
+    b2.x_origin = 3;
+    b2.y_origin = 4;
+
+
+    //Draw UI
+    clear_ui(b1);
+    draw_heading(b1);
+    draw_box(b1);
+    draw_box(b2);
 }
-
 /*
 ###############################################################
                     END OF UI FUNCTIONS
@@ -224,15 +265,7 @@ int main(void) {
 
     int x_steps = 0;
 
-    // Set window size
-    ui_window_T w1;    //declare window struct
-    w1.width = 80;          //set window width
-    w1.height = 20;         //set window height
-
-
-    //Draw UI
-    draw_heading(w1);
-    draw_border(w1);
+    draw_ui();
 
     while (true) {
         // Wait for input
