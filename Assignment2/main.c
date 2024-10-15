@@ -107,6 +107,7 @@ void send_ch(char ch)   {
     }
 }
 
+// Initialise pin
 void init_pin(uint pin, bool direction) {
     gpio_init(pin);
     gpio_set_dir(pin, direction);
@@ -122,6 +123,39 @@ void step_motor(int steps, int delay_us) {
         sleep_us(delay_us);
     }
 }
+
+/* 
+################################################################
+                    FUNCTIONS TO DRAW UI
+################################################################                                             
+*/
+// UI window struct contains height and width information
+// Get window width from w1.width
+// Get window height from w1.height
+typedef struct ui_window {
+    int width;
+    int height;
+}   ui_window_T;
+
+// Draw heading
+void draw_heading(ui_window_T w1) {
+    char text[] = "CC2511 Assignment 2";
+    int cursor_location = round((w1.width-sizeof(text))/2); //set cursor to middle of window line
+    
+    term_move_to(cursor_location,1);
+    term_set_color(clrGreen, clrBlack);
+    printf(text);
+}
+
+void draw_box() {
+
+}
+
+/*
+###############################################################
+                    END OF UI FUNCTIONS
+###############################################################
+*/
 
 int main(void) {
     // Initialise components
@@ -155,6 +189,15 @@ int main(void) {
     uart_puts(UART_ID, "Ready for commands...\n");
 
     int x_steps = 0;
+
+    // Set window size
+    ui_window_T w1;    //declare window struct
+    w1.width = 80;          //set window width
+    w1.height = 20;         //set window height
+
+
+    //Draw UI
+    draw_heading(w1);
 
     while (true) {
         // Wait for input
