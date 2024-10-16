@@ -54,11 +54,32 @@
 #define UART_TX_PIN 0
 #define UART_RX_PIN 1
 
-// Stepper motor pins
-#define STEP_PIN_X  11
-#define DIR_PIN_X   12
+#define UART_TX_PIN 0
+#define UART_RX_PIN 1
+
+//Stepper motors
+#define HOME_PIN_Z  2
+#define STEP_PIN_Z  3 // 3 Z forwards is forwards
+#define DIR_PIN_Z   6 // 6
+
+#define HOME_PIN_Y  7
+#define STEP_PIN_Y  8 // Y forwards is down
+#define DIR_PIN_Y   9 //
+
+#define HOME_PIN_X  10
+#define STEP_PIN_X  11  // 11 X forwards is right
+#define DIR_PIN_X   12  // 12
+
+#define ENABLE_PIN  14
+#define FAULT_PIN   15
+#define DECAY_PIN   16
 #define SLEEP_PIN   17
 #define RESET_PIN   18
+
+#define MAX_POSITION 5000
+#define MIN_POSITION 0
+
+int current_position = 0;
 
 // uart stuff
 static int chars_rxed = 0;
@@ -127,6 +148,37 @@ void step_motor(int steps, int delay_us) {
     }
 }
 
+// Function to move the motor to the target position
+void move_to_position(int target_position) {
+    if (target_position < MIN_POSITION || target_position > MAX_POSITION) {
+        //uart_puts(UART_ID, "Error: Position out of bounds.\n");
+        return;
+    }
+
+    int steps_to_move = target_position - current_position;
+
+    if (steps_to_move > 0) {
+        // Move forward
+        gpio_put(DIR_PIN_X, true);  // Forward direction
+        step_motor(steps_to_move, 800);  // Move forward by steps_to_move
+        //uart_puts(UART_ID, "Moving forward...\n");
+    } else if (steps_to_move < 0) {
+        // Move backward
+        gpio_put(DIR_PIN_X, false);  // Reverse direction
+        step_motor(abs(steps_to_move), 800);  // Move backward by abs(steps_to_move)
+        //uart_puts(UART_ID, "Moving backward...\n");
+    } else {
+        //uart_puts(UART_ID, "Already at the target position.\n");
+    }
+
+// Update the current position
+    current_position = target_position;
+
+    // Print current position
+    char message[50];
+    snprintf(message, sizeof(message), "Current position: %d\n", current_position);
+    uart_puts(UART_ID, message);
+}
 /* 
 ################################################################
                         UI FRAMEWORK
@@ -294,8 +346,8 @@ int main(void) {
     // Configure window box
     // TIP: UI works better when width and height are multiples of 9
     box_T win_box;                              //declare box struct
-    win_box.width = 93;                        //set box width
-    win_box.height = 36;                        //set box height
+    win_box.width = 150;                        //set box width
+    win_box.height = 25;                        //set box height
     win_box.x_origin = 1;                       //set box x origin
     win_box.y_origin = 1;                       //set box y origin
     win_box.header = "CC2511 Assignment 2";     //set box header
@@ -373,27 +425,23 @@ int main(void) {
     ###############################################################
     */
 
+    int target_position = 0;
+
     while (true) {
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
         }
 
-          if (sscanf(buffer, "x %d", &x_steps) == 1) {
-            if (x_steps < 0) {
-                // If steps are negative, set direction to reverse
-                gpio_put(DIR_PIN_X, false);
-                x_steps = abs(x_steps);  // Use the absolute value of steps
-            } else {
-                // If steps are positive, set direction to forward
-                gpio_put(DIR_PIN_X, true);
-            }
-            
-            // Move motor with a delay of 1000 us per step
-            step_motor(x_steps, 500);  
-        } 
-        else {
-            uart_puts(UART_ID, "Invalid command. Use 'x <steps>'\n");
+        // Parse the command and extract the target position
+        if (sscanf(buffer, "%d", &target_position) == 1) {
+            char message[50];
+            snprintf(message, sizeof(message), "Target position: %d\n", target_position);
+            //uart_puts(UART_ID, message);
+
+            move_to_position(target_position);  // Move motor to the target position
+        } else {
+            //uart_puts(UART_ID, "Invalid command. Enter a valid position (0-7000).\n");
         }
 
         input_ready = false;  // Reset input flag for the next command
