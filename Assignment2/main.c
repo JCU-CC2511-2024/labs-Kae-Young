@@ -294,43 +294,54 @@ int main(void) {
     // Configure window box
     // TIP: UI works better when width and height are multiples of 9
     box_T win_box;                              //declare box struct
-    win_box.width = 93;                        //set box width
-    win_box.height = 36;                        //set box height
+    win_box.width = 80;                        //set box width
+    win_box.height = 30;                        //set box height
     win_box.x_origin = 1;                       //set box x origin
     win_box.y_origin = 1;                       //set box y origin
     win_box.header = "CC2511 Assignment 2";     //set box header
     win_box.is_heading_centered = true;         //set heading alignment
 
     //the window is made up of a 9x9 grid
-    int x_grid_step = round(win_box.width/9);
-    int y_grid_step = round(win_box.height/9);
+    double width = win_box.width;
+    double height = win_box.height;
+    double x_grid_step = width/9;
+    double y_grid_step = height/9;
 
     // Configure xyz box
     box_T xyz_box;
-    xyz_box.width = 3*x_grid_step;
-    xyz_box.height = 4*y_grid_step;
-    xyz_box.x_origin = 1*x_grid_step;
-    xyz_box.y_origin = 1*y_grid_step;
+    xyz_box.width = round(2*x_grid_step);
+    xyz_box.height = round(3*y_grid_step);
+    xyz_box.x_origin = round(1*x_grid_step);
+    xyz_box.y_origin = round(1*y_grid_step);
     xyz_box.header = "Coordinates";
     xyz_box.is_heading_centered = true;
 
     // Configure options box
     box_T opt_box;
-    opt_box.width = xyz_box.width;                      //equal width as xyz_box
-    opt_box.height = xyz_box.height;                    //equal height as xyz_box
-    opt_box.x_origin = 2*x_grid_step + opt_box.width;   //equal width as xyz_box
-    opt_box.y_origin = xyz_box.y_origin;                //vertically aligned with xyz_box
+    opt_box.width = round(4*x_grid_step);
+    opt_box.height = xyz_box.height;                                  //equal height as xyz_box
+    opt_box.x_origin = round(win_box.width - x_grid_step - opt_box.width);   //equal width as xyz_box
+    opt_box.y_origin = xyz_box.y_origin;                              //vertically aligned with xyz_box
     opt_box.header = "Options";
     opt_box.is_heading_centered = true;
 
     // Configure input box
     box_T in_box;
-    in_box.width = xyz_box.width + opt_box.width + x_grid_step;     //same width as left of xyz_box to right of opt_box
-    in_box.height = 2*y_grid_step;                                  
-    in_box.x_origin = xyz_box.x_origin;                             //aligned horizontally with xyz_box
-    in_box.y_origin = xyz_box.height + 2*y_grid_step;                    
+    in_box.width = round(xyz_box.width + opt_box.width + x_grid_step);     //same width as left of xyz_box to right of opt_box
+    in_box.height = round(1.5*y_grid_step);                                  
+    in_box.x_origin = round(xyz_box.x_origin);                             //aligned horizontally with xyz_box
+    in_box.y_origin = round(xyz_box.height + 2*y_grid_step);                    
     in_box.header = "Input";
     in_box.is_heading_centered = false;
+
+    //Configure output box
+    box_T out_box;
+    out_box.width = in_box.width;                       //equal width as input box
+    out_box.height = in_box.height;                     //equal height as output box
+    out_box.x_origin = in_box.x_origin;                 //horizontally aligned with input box
+    out_box.y_origin = in_box.y_origin + in_box.height; //just below input box
+    out_box.header = "Output";
+    out_box.is_heading_centered = false;
 
     // Draw UI frame
     clear_ui(win_box);
@@ -338,6 +349,7 @@ int main(void) {
     draw_box(xyz_box);
     draw_box(opt_box);
     draw_box(in_box);
+    draw_box(out_box);
 
     // Draw coord box contents
     term_set_color(clrGreen, clrBlack);
@@ -353,20 +365,26 @@ int main(void) {
     }
 
     // Draw options box contents
-    char opt1[] = "1. Manual Control";
-    char opt2[] = "2. Load File";
-    char opt3[] = "3. Zero System";
-    char opt4[] = "4. Resize Window";
-    char *options = {opt1, opt2, opt3, opt4};
     
+    static int num_of_options = 5;
+    static int max_length = 22;
+    char options[4][23] = {"MAN - Manual Control", "LOAD - Load File", "ZERO - Zero System", "RESIZE - Resize Window"};
+    x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
+    y_cursor = round(((opt_box.height+2) - num_of_options)/2 + opt_box.y_origin);
+    for (int i = 0; i < 4; i++)
+    {
+      term_move_to(x_cursor, y_cursor + i);
+      printf(options[i]);
+    }
+    
+    // Print coordinates
+    print_coords(xyz_box, coords, coord_text_width, coord_text_height);
+
     // Draw input ready
     x_cursor = in_box.x_origin + 3;
     y_cursor = in_box.y_origin + 2;
     term_move_to(x_cursor, y_cursor);
     printf("> ");
-    
-    // Print coordinates
-    print_coords(xyz_box, coords, coord_text_width, coord_text_height);
     /*
     ###############################################################
                             DRAW UI END
