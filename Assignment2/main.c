@@ -265,6 +265,24 @@ void draw_box(box_T b)    {
     }
 }
 
+void clr_input(box_T b)     {
+    term_set_color(clrGreen, clrBlack);
+    int x_cursor = b.x_origin + 5;
+    int y_cursor = b.y_origin + 2;
+    term_move_to(x_cursor, y_cursor);
+    printf("                                         ");
+    term_move_to(x_cursor, y_cursor);
+}
+
+void clr_output(box_T b)    {
+    term_set_color(clrGreen, clrBlack);
+    int x_cursor = b.x_origin + 2;
+    int y_cursor = b.y_origin + 2;
+    term_move_to(x_cursor, y_cursor);
+    printf("                                         ");
+    clr_input(b);
+}
+
 // Print coordinates
 void print_coords(box_T xyz_box, int coords[], int coord_text_width, int coord_text_height) {
     term_set_color(clrGreen, clrBlack);
