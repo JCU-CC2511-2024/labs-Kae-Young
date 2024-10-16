@@ -76,10 +76,15 @@
 #define SLEEP_PIN   17
 #define RESET_PIN   18
 
-#define MAX_POSITION 5000
 #define MIN_POSITION 0
+#define X_MAX 5000
+#define Y_MAX 5000 //2200
+#define Z_MAX 2000 
 
-int current_position = 0;
+// Current position of the motor (in steps)
+int x_current_position = 0;
+int y_current_position = 0;
+int z_current_position = 0;
 
 // uart stuff
 static int chars_rxed = 0;
@@ -129,55 +134,42 @@ void on_uart_rx() {
     }
 }
 
-
-
-// Initialise pin
 void init_pin(uint pin, bool direction) {
     gpio_init(pin);
     gpio_set_dir(pin, direction);
 }
 
-// Function to step the motor 'steps' times
-void step_motor(int steps, int delay_us) {
+
+// Generalized motor stepping function
+void step_motor(uint step_pin, int steps, int delay_us) {
     for (int i = 0; i < steps; i++) {
-        // Pulse the STEP pin
-        gpio_put(STEP_PIN_X, true);
+        gpio_put(step_pin, true);
         sleep_us(delay_us);
-        gpio_put(STEP_PIN_X, false);
+        gpio_put(step_pin, false);
         sleep_us(delay_us);
     }
 }
 
-// Function to move the motor to the target position
-void move_to_position(int target_position) {
-    if (target_position < MIN_POSITION || target_position > MAX_POSITION) {
-        //uart_puts(UART_ID, "Error: Position out of bounds.\n");
+// Generalized function to move motor to a target position
+void move_to_position(int *current_position, int target_position, uint step_pin, uint dir_pin, int max_position) {
+    if (target_position < MIN_POSITION || target_position > max_position) {
+        uart_puts(UART_ID, "Error: Position out of bounds.\n");
         return;
     }
 
-    int steps_to_move = target_position - current_position;
+    int steps_to_move = target_position - *current_position;
 
-    if (steps_to_move > 0) {
-        // Move forward
-        gpio_put(DIR_PIN_X, true);  // Forward direction
-        step_motor(steps_to_move, 800);  // Move forward by steps_to_move
-        //uart_puts(UART_ID, "Moving forward...\n");
-    } else if (steps_to_move < 0) {
-        // Move backward
-        gpio_put(DIR_PIN_X, false);  // Reverse direction
-        step_motor(abs(steps_to_move), 800);  // Move backward by abs(steps_to_move)
-        //uart_puts(UART_ID, "Moving backward...\n");
+    if (steps_to_move != 0) {
+        gpio_put(dir_pin, steps_to_move > 0);  // Set direction
+        step_motor(step_pin, abs(steps_to_move), 800);  // Move motor
+        *current_position = target_position;
+
+        char message[50];
+        snprintf(message, sizeof(message), "Moved to position: %d\n", *current_position);
+        uart_puts(UART_ID, message);
     } else {
-        //uart_puts(UART_ID, "Already at the target position.\n");
+        uart_puts(UART_ID, "Already at the target position.\n");
     }
-
-// Update the current position
-    current_position = target_position;
-
-    // Print current position
-    char message[50];
-    snprintf(message, sizeof(message), "Current position: %d\n", current_position);
-    uart_puts(UART_ID, message);
 }
 /* 
 ################################################################
@@ -307,13 +299,17 @@ int main(void) {
     stdio_init_all();
   
     // Initialize GPIO pins
+    // Initialize GPIO pins
     init_pin(STEP_PIN_X, GPIO_OUT);
     init_pin(DIR_PIN_X, GPIO_OUT);
+    init_pin(STEP_PIN_Y, GPIO_OUT);
+    init_pin(DIR_PIN_Y, GPIO_OUT);
+    init_pin(STEP_PIN_Z, GPIO_OUT);
+    init_pin(DIR_PIN_Z, GPIO_OUT);
     init_pin(RESET_PIN, GPIO_OUT);
     init_pin(SLEEP_PIN, GPIO_OUT);
 
     // Set direction forward and wake up the driver
-    gpio_put(DIR_PIN_X, true);  // Forward direction
     gpio_put(SLEEP_PIN, true);  // Enable driver
     gpio_put(RESET_PIN, true);  // Reset any faults
   
@@ -346,13 +342,8 @@ int main(void) {
     // Configure window box
     // TIP: UI works better when width and height are multiples of 9
     box_T win_box;                              //declare box struct
-<<<<<<< HEAD
     win_box.width = 150;                        //set box width
     win_box.height = 25;                        //set box height
-=======
-    win_box.width = 80;                        //set box width
-    win_box.height = 30;                        //set box height
->>>>>>> 758d83e3659a3684a811feb1d3f8af6c2085be6e
     win_box.x_origin = 1;                       //set box x origin
     win_box.y_origin = 1;                       //set box y origin
     win_box.header = "CC2511 Assignment 2";     //set box header
@@ -448,25 +439,27 @@ int main(void) {
     ###############################################################
     */
 
-    int target_position = 0;
+    int x_target_position = 0;
+    int y_target_position = 0;
+    int z_target_position = 0;
 
-    while (true) {
+     while (true) {
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
         }
 
-        // Parse the command and extract the target position
-        if (sscanf(buffer, "%d", &target_position) == 1) {
-            char message[50];
-            snprintf(message, sizeof(message), "Target position: %d\n", target_position);
-            //uart_puts(UART_ID, message);
-
-            move_to_position(target_position);  // Move motor to the target position
+        // Process input for x and y commands
+        if (sscanf(buffer, "x %d", &x_target_position) == 1) {
+            move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
+        } else if (sscanf(buffer, "y %d", &y_target_position) == 1) {
+            move_to_position(&y_current_position, y_target_position, STEP_PIN_Y, DIR_PIN_Y, Y_MAX);
+        } else if (sscanf(buffer, "z %d", &z_target_position) == 1) {
+            move_to_position(&z_current_position, z_target_position, STEP_PIN_Z, DIR_PIN_Z, Z_MAX);
         } else {
-            //uart_puts(UART_ID, "Invalid command. Enter a valid position (0-7000).\n");
+            uart_puts(UART_ID, "Invalid command. Enter a valid position (0-5000).\n");
         }
 
-        input_ready = false;  // Reset input flag for the next command
+        input_ready = false;  // Reset input flag
     }
 }
