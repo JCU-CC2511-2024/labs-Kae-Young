@@ -81,96 +81,9 @@
 #define Y_MAX 5000 //2200
 #define Z_MAX 2000 
 
-// Current position of the motor (in steps)
-int x_current_position = 0;
-int y_current_position = 0;
-int z_current_position = 0;
+// Initialize coordinate array
+int coords[] = {0, 0, 0};
 
-// uart stuff
-static int chars_rxed = 0;
-volatile char buffer [100];
-volatile unsigned int myIndex = 0;
-volatile bool input_ready = false;
-
-// Write character
-void send_ch(char ch)   {
-    if(uart_is_writable(UART_ID))   {
-        uart_putc(UART_ID, ch);
-    }
-}
-
-// RX interrupt handler
-void on_uart_rx() {
-    while (uart_is_readable(UART_ID)) {
-        uint8_t ch = uart_getc(UART_ID);
-        // Echo back the character received
-        send_ch(ch);
-        // Detect character
-        switch (ch) {
-            // Check if 'Enter' is pressed
-            case '\n':                          
-                buffer[myIndex] = 0;
-                uart_puts(UART_ID, "\n");
-                myIndex = 0;
-                input_ready = true;
-                break;
-            case '\r':
-                break;
-            // Backspace handling
-            case '\177':                        
-                if (myIndex > 0) {
-                    myIndex--;
-                    buffer[myIndex] = '\000';
-                }
-                break;
-            // Save the character to buffer
-            default:
-                if (myIndex <= 98)  {           
-                    buffer[myIndex] = ch;      
-                    myIndex++; 
-                }
-        }
-        chars_rxed++;
-    }
-}
-
-void init_pin(uint pin, bool direction) {
-    gpio_init(pin);
-    gpio_set_dir(pin, direction);
-}
-
-
-// Generalized motor stepping function
-void step_motor(uint step_pin, int steps, int delay_us) {
-    for (int i = 0; i < steps; i++) {
-        gpio_put(step_pin, true);
-        sleep_us(delay_us);
-        gpio_put(step_pin, false);
-        sleep_us(delay_us);
-    }
-}
-
-// Generalized function to move motor to a target position
-void move_to_position(int *current_position, int target_position, uint step_pin, uint dir_pin, int max_position) {
-    if (target_position < MIN_POSITION || target_position > max_position) {
-        uart_puts(UART_ID, "Error: Position out of bounds.\n");
-        return;
-    }
-
-    int steps_to_move = target_position - *current_position;
-
-    if (steps_to_move != 0) {
-        gpio_put(dir_pin, steps_to_move > 0);  // Set direction
-        step_motor(step_pin, abs(steps_to_move), 800);  // Move motor
-        *current_position = target_position;
-
-        char message[50];
-        snprintf(message, sizeof(message), "Moved to position: %d\n", *current_position);
-        uart_puts(UART_ID, message);
-    } else {
-        uart_puts(UART_ID, "Already at the target position.\n");
-    }
-}
 /* 
 ################################################################
                         UI FRAMEWORK
@@ -188,15 +101,22 @@ typedef struct box {
     bool is_heading_centered;
 }   box_T;
 
-void clear_ui(box_T b) {
+// declare boxes
+box_T win_box;
+box_T xyz_box;
+box_T opt_box;
+box_T in_box;
+box_T out_box;
+
+void clear_ui() {
     term_move_to(1,1);
     term_set_color(clrBlack, clrBlack);
-    for (int i = 0; i < b.height + 1; i++)
+    for (int i = 0; i < win_box.height + 1; i++)
     {
-        for (int j = 0; j < b.width + 1; j++)
+        for (int j = 0; j < win_box.width + 1; j++)
         {
             printf(" ");
-            if(j == b.width)   {
+            if(j == win_box.width)   {
                 printf(" \r\n");
             }
         } 
@@ -265,26 +185,37 @@ void draw_box(box_T b)    {
     }
 }
 
-void clr_input(box_T b)     {
+// Clear input box
+void clr_input()     {
     term_set_color(clrGreen, clrBlack);
-    int x_cursor = b.x_origin + 5;
-    int y_cursor = b.y_origin + 2;
+    int x_cursor = in_box.x_origin + 5;
+    int y_cursor = in_box.y_origin + 2;
     term_move_to(x_cursor, y_cursor);
-    printf("                                         ");
+    printf("                                                                    ");
     term_move_to(x_cursor, y_cursor);
 }
-
-void clr_output(box_T b)    {
+// Clear output box
+void clr_output()    {
     term_set_color(clrGreen, clrBlack);
-    int x_cursor = b.x_origin + 2;
-    int y_cursor = b.y_origin + 2;
+    int x_cursor = out_box.x_origin + 2;
+    int y_cursor = out_box.y_origin + 2;
     term_move_to(x_cursor, y_cursor);
-    printf("                                         ");
-    clr_input(b);
+    printf("                                                                    ");
+}
+
+// Print to output box
+void print_output(char output[])  {
+    clr_output();
+    term_set_color(clrGreen, clrBlack);
+    int x_cursor = out_box.x_origin + 2;
+    int y_cursor = out_box.y_origin + 2;
+    term_move_to(x_cursor, y_cursor);
+    uart_puts(UART_ID, output);
+    clr_input();
 }
 
 // Print coordinates
-void print_coords(box_T xyz_box, int coords[], int coord_text_width, int coord_text_height) {
+void print_coords(int coords[], int coord_text_width, int coord_text_height) {
     term_set_color(clrGreen, clrBlack);
     //set cursor position
     int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin) + 4;
@@ -306,11 +237,206 @@ void print_coords(box_T xyz_box, int coords[], int coord_text_width, int coord_t
         }
     }
 }
+
+// Draw UI
+void draw_ui()  {
+    // Configure window box
+    // TIP: UI works better when width and height are multiples of 9
+    win_box.width = 150;                        //set box width
+    win_box.height = 25;                        //set box height
+    win_box.x_origin = 1;                       //set box x origin
+    win_box.y_origin = 1;                       //set box y origin
+    win_box.header = "CC2511 Assignment 2";     //set box header
+    win_box.is_heading_centered = true;         //set heading alignment
+
+    //the window is made up of a 9x9 grid
+    double width = win_box.width;
+    double height = win_box.height;
+    double x_grid_step = width/9;
+    double y_grid_step = height/9;
+
+    // Configure xyz box
+    xyz_box.width = round(2*x_grid_step);
+    xyz_box.height = round(3*y_grid_step);
+    xyz_box.x_origin = round(1*x_grid_step);
+    xyz_box.y_origin = round(1*y_grid_step);
+    xyz_box.header = "Coordinates";
+    xyz_box.is_heading_centered = true;
+
+    // Configure options box
+    opt_box.width = round(4*x_grid_step);
+    opt_box.height = xyz_box.height;                                  //equal height as xyz_box
+    opt_box.x_origin = round(win_box.width - x_grid_step - opt_box.width);   //equal width as xyz_box
+    opt_box.y_origin = xyz_box.y_origin;                              //vertically aligned with xyz_box
+    opt_box.header = "Options";
+    opt_box.is_heading_centered = true;
+
+    // Configure input box
+    in_box.width = round(xyz_box.width + opt_box.width + x_grid_step);     //same width as left of xyz_box to right of opt_box
+    in_box.height = round(1.5*y_grid_step);                                  
+    in_box.x_origin = round(xyz_box.x_origin);                             //aligned horizontally with xyz_box
+    in_box.y_origin = round(xyz_box.height + 2*y_grid_step);                    
+    in_box.header = "Input";
+    in_box.is_heading_centered = false;
+
+    //Configure output box
+    out_box.width = in_box.width;                       //equal width as input box
+    out_box.height = in_box.height;                     //equal height as output box
+    out_box.x_origin = in_box.x_origin;                 //horizontally aligned with input box
+    out_box.y_origin = in_box.y_origin + in_box.height; //just below input box
+    out_box.header = "Output";
+    out_box.is_heading_centered = false;
+
+    // Draw UI frame
+    clear_ui();
+    draw_box(win_box);
+    draw_box(xyz_box);
+    draw_box(opt_box);
+    draw_box(in_box);
+    draw_box(out_box);
+
+    // Draw coord box contents
+    term_set_color(clrGreen, clrBlack);
+    int coord_text_width = 7;
+    int coord_text_height = 3;
+    int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin);
+    int y_cursor = round(((xyz_box.height+2) - coord_text_height)/2 + xyz_box.y_origin);
+    char xyz[] = {'x', 'y', 'z'};
+    for (int i = 0; i < coord_text_height; i++)
+    {
+        term_move_to(x_cursor, i + y_cursor);
+        printf("%c : ", xyz[i]);
+    }
+
+    // Draw options box contents
+    
+    static int num_of_options = 5;
+    static int max_length = 23;
+    char options[4][24] = {"MAN    - Manual Control", "LOAD   - Load File", "ZERO   - Zero System", "RESIZE - Resize Window"};
+    x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
+    y_cursor = round(((opt_box.height+2) - num_of_options)/2 + opt_box.y_origin);
+    for (int i = 0; i < 4; i++)
+    {
+      term_move_to(x_cursor, y_cursor + i);
+      printf(options[i]);
+    }
+    
+    // Print coordinates
+    print_coords(coords, coord_text_width, coord_text_height);
+
+    // Draw input ready
+    x_cursor = in_box.x_origin + 3;
+    y_cursor = in_box.y_origin + 2;
+    term_move_to(x_cursor, y_cursor);
+    printf("> ");
+
+    print_output("Ready for commands...\n");
+    clr_input();
+}
+
 /*
 ###############################################################
                     END OF UI FRAMEWORK
 ###############################################################
 */
+
+// Current position of the motor (in steps)
+int x_current_position = 0;
+int y_current_position = 0;
+int z_current_position = 0;
+
+// uart stuff
+static int chars_rxed = 0;
+volatile char buffer [100];
+volatile unsigned int myIndex = 0;
+volatile bool input_ready = false;
+
+// Write character
+void send_ch(char ch)   {
+    if(uart_is_writable(UART_ID))   {
+        uart_putc(UART_ID, ch);
+    }
+}
+
+// RX interrupt handler
+void on_uart_rx() {
+    while (uart_is_readable(UART_ID)) {
+        uint8_t ch = uart_getc(UART_ID);
+        // Echo back the character received
+        send_ch(ch);
+        // Detect character
+        switch (ch) {
+            // Check if 'Enter' is pressed
+            case '\n':                          
+                buffer[myIndex] = 0;
+                myIndex = 0;
+                input_ready = true;
+                break;
+            case '\r':
+                buffer[myIndex] = 0;
+                clr_input();
+                myIndex = 0;
+                input_ready = true;
+                break;
+                break;
+            // Backspace handling
+            case '\177':                        
+                if (myIndex > 0) {
+                    myIndex--;
+                    buffer[myIndex] = '\000';
+                }
+                break;
+            // Save the character to buffer
+            default:
+                if (myIndex <= 98)  {           
+                    buffer[myIndex] = ch;      
+                    myIndex++; 
+                }
+        }
+        chars_rxed++;
+    }
+}
+
+void init_pin(uint pin, bool direction) {
+    gpio_init(pin);
+    gpio_set_dir(pin, direction);
+}
+
+
+// Generalized motor stepping function
+void step_motor(uint step_pin, int steps, int delay_us) {
+    for (int i = 0; i < steps; i++) {
+        gpio_put(step_pin, true);
+        sleep_us(delay_us);
+        gpio_put(step_pin, false);
+        sleep_us(delay_us);
+    }
+}
+
+// Generalized function to move motor to a target position
+void move_to_position(int *current_position, int target_position, uint step_pin, uint dir_pin, int max_position) {
+    if (target_position < MIN_POSITION || target_position > max_position) {
+        //uart_puts(UART_ID, "Error: Position out of bounds.\n");
+        print_output("Error: Position out of bounds.");
+        return;
+    }
+
+    int steps_to_move = target_position - *current_position;
+
+    if (steps_to_move != 0) {
+        gpio_put(dir_pin, steps_to_move > 0);  // Set direction
+        step_motor(step_pin, abs(steps_to_move), 800);  // Move motor
+        *current_position = target_position;
+
+        char message[50];
+        snprintf(message, sizeof(message), "Moved to position: %d", *current_position);
+        //uart_puts(UART_ID, message);
+        print_output(message);
+    } else {
+        //uart_puts(UART_ID, "Already at the target position.\n");
+        print_output("Already at the target position.");
+    }
+}
 
 int main(void) {
     // Initialise components
@@ -345,117 +471,11 @@ int main(void) {
     irq_set_enabled(UART_IRQ, true);
     uart_set_irq_enables(UART_ID, true, false);
 
-    //uart_puts(UART_ID, "Ready for commands...\n");
-
     int x_steps = 0;
 
-    // Initialize coordinate array
-    int coords[] = {0, 0, 0};
-
-    /*
-    ###############################################################
-                              DRAW UI
-    ###############################################################
-    */
-    // Configure window box
-    // TIP: UI works better when width and height are multiples of 9
-    box_T win_box;                              //declare box struct
-    win_box.width = 150;                        //set box width
-    win_box.height = 25;                        //set box height
-    win_box.x_origin = 1;                       //set box x origin
-    win_box.y_origin = 1;                       //set box y origin
-    win_box.header = "CC2511 Assignment 2";     //set box header
-    win_box.is_heading_centered = true;         //set heading alignment
-
-    //the window is made up of a 9x9 grid
-    double width = win_box.width;
-    double height = win_box.height;
-    double x_grid_step = width/9;
-    double y_grid_step = height/9;
-
-    // Configure xyz box
-    box_T xyz_box;
-    xyz_box.width = round(2*x_grid_step);
-    xyz_box.height = round(3*y_grid_step);
-    xyz_box.x_origin = round(1*x_grid_step);
-    xyz_box.y_origin = round(1*y_grid_step);
-    xyz_box.header = "Coordinates";
-    xyz_box.is_heading_centered = true;
-
-    // Configure options box
-    box_T opt_box;
-    opt_box.width = round(4*x_grid_step);
-    opt_box.height = xyz_box.height;                                  //equal height as xyz_box
-    opt_box.x_origin = round(win_box.width - x_grid_step - opt_box.width);   //equal width as xyz_box
-    opt_box.y_origin = xyz_box.y_origin;                              //vertically aligned with xyz_box
-    opt_box.header = "Options";
-    opt_box.is_heading_centered = true;
-
-    // Configure input box
-    box_T in_box;
-    in_box.width = round(xyz_box.width + opt_box.width + x_grid_step);     //same width as left of xyz_box to right of opt_box
-    in_box.height = round(1.5*y_grid_step);                                  
-    in_box.x_origin = round(xyz_box.x_origin);                             //aligned horizontally with xyz_box
-    in_box.y_origin = round(xyz_box.height + 2*y_grid_step);                    
-    in_box.header = "Input";
-    in_box.is_heading_centered = false;
-
-    //Configure output box
-    box_T out_box;
-    out_box.width = in_box.width;                       //equal width as input box
-    out_box.height = in_box.height;                     //equal height as output box
-    out_box.x_origin = in_box.x_origin;                 //horizontally aligned with input box
-    out_box.y_origin = in_box.y_origin + in_box.height; //just below input box
-    out_box.header = "Output";
-    out_box.is_heading_centered = false;
-
-    // Draw UI frame
-    clear_ui(win_box);
-    draw_box(win_box);
-    draw_box(xyz_box);
-    draw_box(opt_box);
-    draw_box(in_box);
-    draw_box(out_box);
-
-    // Draw coord box contents
-    term_set_color(clrGreen, clrBlack);
-    int coord_text_width = 7;
-    int coord_text_height = 3;
-    int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin);
-    int y_cursor = round(((xyz_box.height+2) - coord_text_height)/2 + xyz_box.y_origin);
-    char xyz[] = {'x', 'y', 'z'};
-    for (int i = 0; i < coord_text_height; i++)
-    {
-        term_move_to(x_cursor, i + y_cursor);
-        printf("%c : ", xyz[i]);
-    }
-
-    // Draw options box contents
+    draw_ui();
     
-    static int num_of_options = 5;
-    static int max_length = 22;
-    char options[4][23] = {"MAN - Manual Control", "LOAD - Load File", "ZERO - Zero System", "RESIZE - Resize Window"};
-    x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
-    y_cursor = round(((opt_box.height+2) - num_of_options)/2 + opt_box.y_origin);
-    for (int i = 0; i < 4; i++)
-    {
-      term_move_to(x_cursor, y_cursor + i);
-      printf(options[i]);
-    }
-    
-    // Print coordinates
-    print_coords(xyz_box, coords, coord_text_width, coord_text_height);
-
-    // Draw input ready
-    x_cursor = in_box.x_origin + 3;
-    y_cursor = in_box.y_origin + 2;
-    term_move_to(x_cursor, y_cursor);
-    printf("> ");
-    /*
-    ###############################################################
-                            DRAW UI END
-    ###############################################################
-    */
+    //uart_puts(UART_ID, "Ready for commands...\n");
 
     int x_target_position = 0;
     int y_target_position = 0;
@@ -466,7 +486,6 @@ int main(void) {
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
         }
-
         // Process input for x and y commands
         if (sscanf(buffer, "x %d", &x_target_position) == 1) {
             move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
@@ -475,7 +494,9 @@ int main(void) {
         } else if (sscanf(buffer, "z %d", &z_target_position) == 1) {
             move_to_position(&z_current_position, z_target_position, STEP_PIN_Z, DIR_PIN_Z, Z_MAX);
         } else {
-            uart_puts(UART_ID, "Invalid command. Enter a valid position (0-5000).\n");
+            print_output("Invalid command. Enter a valid position (0-5000).");
+            clr_input(in_box);
+            //uart_puts(UART_ID, "Invalid command. Enter a valid position (0-5000).\n");
         }
 
         input_ready = false;  // Reset input flag
