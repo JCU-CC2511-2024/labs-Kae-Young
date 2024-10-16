@@ -129,7 +129,7 @@ void step_motor(int steps, int delay_us) {
 
 /* 
 ################################################################
-                FUNCTIONS TO DRAW/CONTROL UI
+                        UI FRAMEWORK
 ################################################################                                             
 */
 // UI box struct contains height and width information
@@ -141,6 +141,7 @@ typedef struct box {
     int x_origin;
     int y_origin;
     char *header;
+    bool is_heading_centered;
 }   box_T;
 
 void clear_ui(box_T b) {
@@ -161,13 +162,20 @@ void clear_ui(box_T b) {
 // Draw heading
 void draw_heading(box_T b) {
     //set colour
-    term_set_color(clrGreen, clrBlack);
+    term_set_color(clrBlack, clrGreen);
 
-    int x_cursor_location = round(((b.width-2)-strlen(b.header))/2) + b.x_origin; //set cursor to middle of window horizon
+    int x_cursor_location; //set horizontal cursor
+    if(b.is_heading_centered)
+    {
+        x_cursor_location = round(((b.width+2)-strlen(b.header))/2) + b.x_origin; //set to center of window
+    }
+    else
+    {
+        x_cursor_location = b.x_origin + 2; //set left aligned
+    }
     int y_cursor_location = b.y_origin + 1; //set cursor to 1 line below top of box
     
     term_move_to(x_cursor_location, y_cursor_location);
-    term_set_color(clrGreen, clrBlack);
     printf(b.header);
 }
 
@@ -213,41 +221,32 @@ void draw_box(box_T b)    {
     }
 }
 
-void draw_ui()  {
-    // Configure window box
-    box_T win_box;    //declare box struct
-    win_box.width = 150;          //set box width
-    win_box.height = 33;         //set box height
-    win_box.x_origin = 1;        //set box x origin
-    win_box.y_origin = 1;        //set box y origin
-    win_box.header = "CC2511 Assignment 2";
-
-    // Configure xyz box
-    box_T xyz_box;
-    xyz_box.width = round(win_box.width/3);
-    xyz_box.height = 10;
-    xyz_box.x_origin = win_box.width/9;
-    xyz_box.y_origin = 4;
-    xyz_box.header = "Coordinates";
-
-    // Configure options box
-    box_T opt_box;
-    opt_box.width = xyz_box.width;
-    opt_box.height = xyz_box.height;
-    opt_box.x_origin = 2*win_box.width/9 + xyz_box.width;
-    opt_box.y_origin = 4;
-    opt_box.header = "Options";
-
-
-    //Draw UI
-    clear_ui(win_box);
-    draw_box(win_box);
-    draw_box(xyz_box);
-    draw_box(opt_box);
+// Print coordinates
+void print_coords(box_T xyz_box, int coords[], int coord_text_width, int coord_text_height) {
+    term_set_color(clrGreen, clrBlack);
+    //set cursor position
+    int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin) + 4;
+    int y_cursor = round(((xyz_box.height+2) - coord_text_height)/2 + xyz_box.y_origin);
+    for (int i = 0; i < coord_text_height; i++)
+    {
+        term_move_to(x_cursor, i + y_cursor);
+        if (coords[i] <= 9)
+        {
+            printf("00%i", coords[i]);
+        }
+        else if (coords[i] <= 99)
+        {
+            printf("0%i", coords[i]);
+        }
+        else
+        {
+            printf("%i", coords[i]);
+        }
+    }
 }
 /*
 ###############################################################
-                    END OF UI FUNCTIONS
+                    END OF UI FRAMEWORK
 ###############################################################
 */
 
@@ -280,11 +279,89 @@ int main(void) {
     irq_set_enabled(UART_IRQ, true);
     uart_set_irq_enables(UART_ID, true, false);
 
-    uart_puts(UART_ID, "Ready for commands...\n");
+    //uart_puts(UART_ID, "Ready for commands...\n");
 
     int x_steps = 0;
 
-    //draw_ui();
+    // Initialize coordinate array
+    int coords[] = {0, 0, 0};
+
+    /*
+    ###############################################################
+                              DRAW UI
+    ###############################################################
+    */
+    // Configure window box
+    // TIP: UI works better when width and height are multiples of 9
+    box_T win_box;                              //declare box struct
+    win_box.width = 93;                        //set box width
+    win_box.height = 36;                        //set box height
+    win_box.x_origin = 1;                       //set box x origin
+    win_box.y_origin = 1;                       //set box y origin
+    win_box.header = "CC2511 Assignment 2";     //set box header
+    win_box.is_heading_centered = true;         //set heading alignment
+
+    //the window is made up of a 9x9 grid
+    int x_grid_step = round(win_box.width/9);
+    int y_grid_step = round(win_box.height/9);
+
+    // Configure xyz box
+    box_T xyz_box;
+    xyz_box.width = 3*x_grid_step;
+    xyz_box.height = 4*y_grid_step;
+    xyz_box.x_origin = 1*x_grid_step;
+    xyz_box.y_origin = 1*y_grid_step;
+    xyz_box.header = "Coordinates";
+    xyz_box.is_heading_centered = true;
+
+    // Configure options box
+    box_T opt_box;
+    opt_box.width = xyz_box.width;                      //equal width as xyz_box
+    opt_box.height = xyz_box.height;                    //equal height as xyz_box
+    opt_box.x_origin = 2*x_grid_step + opt_box.width;   //equal width as xyz_box
+    opt_box.y_origin = xyz_box.y_origin;                //vertically aligned with xyz_box
+    opt_box.header = "Options";
+    opt_box.is_heading_centered = true;
+
+    // Configure input box
+    box_T in_box;
+    in_box.width = xyz_box.width + opt_box.width + x_grid_step;     //same width as left of xyz_box to right of opt_box
+    in_box.height = 2*y_grid_step;                                  
+    in_box.x_origin = xyz_box.x_origin;                             //aligned horizontally with xyz_box
+    in_box.y_origin = xyz_box.height + 2*y_grid_step;                    
+    in_box.header = "Input";
+    in_box.is_heading_centered = false;
+
+    // Draw UI frame
+    clear_ui(win_box);
+    draw_box(win_box);
+    draw_box(xyz_box);
+    draw_box(opt_box);
+    draw_box(in_box);
+
+    // Draw coord box contents
+    term_set_color(clrGreen, clrBlack);
+    int coord_text_width = 7;
+    int coord_text_height = 3;
+    int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin);
+    int y_cursor = round(((xyz_box.height+2) - coord_text_height)/2 + xyz_box.y_origin);
+    char xyz[] = {'x', 'y', 'z'};
+    for (int i = 0; i < coord_text_height; i++)
+    {
+        term_move_to(x_cursor, i + y_cursor);
+        printf("%c : ", xyz[i]);
+    }
+
+    // Draw options box contents
+    
+    
+    // Print coordinates
+    print_coords(xyz_box, coords, coord_text_width, coord_text_height);
+    /*
+    ###############################################################
+                            DRAW UI END
+    ###############################################################
+    */
 
     while (true) {
         // Wait for input
