@@ -353,7 +353,17 @@ int main(void) {
     }
 
     // Draw options box contents
+    char opt1[] = "1. Manual Control";
+    char opt2[] = "2. Load File";
+    char opt3[] = "3. Zero System";
+    char opt4[] = "4. Resize Window";
+    char *options = {opt1, opt2, opt3, opt4};
     
+    // Draw input ready
+    x_cursor = in_box.x_origin + 3;
+    y_cursor = in_box.y_origin + 2;
+    term_move_to(x_cursor, y_cursor);
+    printf("> ");
     
     // Print coordinates
     print_coords(xyz_box, coords, coord_text_width, coord_text_height);
