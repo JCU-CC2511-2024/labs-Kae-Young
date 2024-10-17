@@ -312,7 +312,7 @@ void draw_ui()  {
     
     static int num_of_options = 5;
     static int max_length = 23;
-    char options[4][24] = {"MAN    - Manual Control", "LOAD   - Load File", "ZERO   - Zero System", "RESIZE - Resize Window"};
+    char options[4][24] = {"M - Manual Control", "L - Load File", "Z - Zero System", "R - Resize Window"};
     x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
     y_cursor = round(((opt_box.height+2) - num_of_options)/2 + opt_box.y_origin);
     for (int i = 0; i < 4; i++)
@@ -377,7 +377,6 @@ void on_uart_rx() {
                 clr_input();
                 myIndex = 0;
                 input_ready = true;
-                break;
                 break;
             // Backspace handling
             case '\177':                        
@@ -486,7 +485,45 @@ int main(void) {
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
         }
-        // Process input for x and y commands
+        //
+        // Process input
+        char command;
+        volatile char argument[20];
+        int input = scanf(buffer, "%c %s", command, argument);
+
+        switch (command)
+        {
+            case 'M':
+                /* code */
+                break;
+            case 'L':
+                break;
+            case 'Z':
+                break;
+            case 'R':
+                clear_ui();
+                draw_ui();
+                break;
+            case 'H':
+                break;
+            case 'x':
+                x_target_position = (int)argument;
+                move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
+                break;
+            case 'y':
+                y_target_position = (int)argument;
+                move_to_position(&y_current_position, y_target_position, STEP_PIN_Y, DIR_PIN_Y, Y_MAX);
+                break;
+            case 'z':
+                z_target_position = (int)argument;
+                move_to_position(&z_current_position, z_target_position, STEP_PIN_Z, DIR_PIN_Z, Z_MAX);
+                break;
+            default:
+                print_output("Invalid command. Enter a valid position (0-5000).");
+                clr_input(in_box);
+                break;
+        }
+        /*
         if (sscanf(buffer, "x %d", &x_target_position) == 1) {
             move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
         } else if (sscanf(buffer, "y %d", &y_target_position) == 1) {
@@ -498,6 +535,7 @@ int main(void) {
             clr_input(in_box);
             //uart_puts(UART_ID, "Invalid command. Enter a valid position (0-5000).\n");
         }
+        */
 
         input_ready = false;  // Reset input flag
     }
