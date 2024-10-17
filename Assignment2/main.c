@@ -348,7 +348,7 @@ int z_current_position = 0;
 // uart stuff
 static int chars_rxed = 0;
 volatile char buffer [100];
-volatile unsigned int myIndex = 0;
+volatile unsigned int myIndex = 0; 
 volatile bool input_ready = false;
 
 // Write character
@@ -401,6 +401,16 @@ void init_pin(uint pin, bool direction) {
     gpio_set_dir(pin, direction);
 }
 
+// Define axis struct
+typedef struct axis {
+    int current_position;
+    int target_position;
+    int min_position;
+    int max_position;
+    int steps_to_move;
+    uint step_pin;
+    uint dir_pin;
+} axis_T;
 
 // Generalized motor stepping function
 void step_motor(uint step_pin, int steps, int delay_us) {
@@ -413,29 +423,74 @@ void step_motor(uint step_pin, int steps, int delay_us) {
 }
 
 // Generalized function to move motor to a target position
-void move_to_position(int *current_position, int target_position, uint step_pin, uint dir_pin, int max_position) {
-    if (target_position < MIN_POSITION || target_position > max_position) {
-        //uart_puts(UART_ID, "Error: Position out of bounds.\n");
-        print_output("Error: Position out of bounds.");
-        return;
+void move_to_position(axis_T x, axis_T y, axis_T z) {
+    for (int i = 0; i < 3; i++)
+    {
+        switch (i)
+        {
+        case 0:
+            if (x.target_position < x.min_position || x.target_position > x.max_position) {
+                uart_puts(UART_ID, "Error: x position out of bounds.\n");
+                return;
+            }
+            break;
+
+        case 1:
+            if (y.target_position < y.min_position || y.target_position > y.max_position) {
+                uart_puts(UART_ID, "Error: y position out of bounds.\n");
+                return;
+            }
+            break;
+
+        case 2:
+            if (z.target_position < z.min_position || z.target_position > z.max_position) {
+                uart_puts(UART_ID, "Error: z position out of bounds.\n");
+                return;
+            }
+            break;
+        
+        default:
+            break;
+        }
     }
 
-    int steps_to_move = target_position - *current_position;
-
+    x.steps_to_move = x.target_position - x.current_position;
+    y.steps_to_move = y.target_position - y.current_position;
+    z.steps_to_move = z.target_position - z.current_position;
+    /*
     if (steps_to_move != 0) {
-        gpio_put(dir_pin, steps_to_move > 0);  // Set direction
-        step_motor(step_pin, abs(steps_to_move), 800);  // Move motor
-        *current_position = target_position;
+        gpio_put(axis.dir_pin, steps_to_move > 0);  // Set direction
+        step_motor(axis.step_pin, abs(steps_to_move), STEP_SLEEP);  // Move motor
+        axis.current_position = axis.target_position;
 
         char message[50];
-        snprintf(message, sizeof(message), "Moved to position: %d", *current_position);
-        //uart_puts(UART_ID, message);
-        print_output(message);
+        snprintf(message, sizeof(message), "Moved to position: %d\n", axis.current_position);
+        uart_puts(UART_ID, message);
     } else {
-        //uart_puts(UART_ID, "Already at the target position.\n");
-        print_output("Already at the target position.");
+        uart_puts(UART_ID, "Already at the target position.\n");
     }
+    */
 }
+
+/*
+int arg_to_int(char arg[])  {
+    int i = 0;
+    while (arg[i] != "\000")
+    {
+        i++;
+    }
+    
+    char content_of_arg[i];
+    for (int j = 0; j < i; i++)
+    {
+        content_of_arg[j] = arg[j];
+    }
+    
+    int output;
+    sscanf(content_of_arg, "%d", &output);
+    return output;
+}
+*/
 
 int main(void) {
     // Initialise components
@@ -480,6 +535,31 @@ int main(void) {
     int y_target_position = 0;
     int z_target_position = 0;
 
+    //define axes
+    axis_T x;
+    x.max_position = X_MAX;
+    x.min_position = MIN_POSITION;
+    x.current_position = 0;
+    x.target_position = 0;
+    x.step_pin = STEP_PIN_X;
+    x.dir_pin = DIR_PIN_X;
+
+    axis_T y;
+    y.max_position = Y_MAX;
+    y.min_position = MIN_POSITION;
+    y.current_position = 0;
+    y.target_position = 0;
+    y.step_pin = STEP_PIN_Y;
+    y.dir_pin = DIR_PIN_Y;
+
+    axis_T z;
+    z.max_position = Z_MAX;
+    z.min_position = MIN_POSITION;
+    z.current_position = 0;
+    z.target_position = 0;
+    z.step_pin = STEP_PIN_Z;
+    z.dir_pin = DIR_PIN_Z;
+
      while (true) {
         // Wait for input
         while (!input_ready) {
@@ -487,36 +567,48 @@ int main(void) {
         }
         //
         // Process input
-        char command;
-        volatile char argument[20];
-        int input = scanf(buffer, "%c %s", command, argument);
+        char command = '\0';
+        char argument[20];
+
+        int input = sscanf(buffer, "%c %s", &command, &argument);
 
         switch (command)
         {
-            case 'M':
+            case 'M':   // Manual control
                 /* code */
                 break;
-            case 'L':
+            case 'L':   // Load
                 break;
-            case 'Z':
+            case 'Z':   // Zero coordinates
+                x.current_position = 0;
+                y.current_position = 0;
+                z.current_position = 0;
+                print_output("Coordinates zeroed");
                 break;
             case 'R':
                 clear_ui();
                 draw_ui();
                 break;
             case 'H':
+                x.target_position = 0;
+                y.target_position = 0;
+                z.target_position = 0;
+                move_to_position(x, y, z);
+                x.current_position = x.target_position;
+                y.current_position = y.target_position;
+                z.current_position = z.target_position;
                 break;
             case 'x':
-                x_target_position = (int)argument;
-                move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
+                sscanf(argument, "%d", &x.target_position);
+                move_to_position(x, y, z);
                 break;
             case 'y':
-                y_target_position = (int)argument;
-                move_to_position(&y_current_position, y_target_position, STEP_PIN_Y, DIR_PIN_Y, Y_MAX);
+                sscanf(argument, "%d", &y.target_position);
+                move_to_position(x, y, z);
                 break;
             case 'z':
-                z_target_position = (int)argument;
-                move_to_position(&z_current_position, z_target_position, STEP_PIN_Z, DIR_PIN_Z, Z_MAX);
+                sscanf(argument, "%d", &z.target_position);
+                move_to_position(x, y, z);
                 break;
             default:
                 print_output("Invalid command. Enter a valid position (0-5000).");
