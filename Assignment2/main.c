@@ -465,24 +465,67 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
         }
     }
 
+    // Calculate steps to move
     x->steps_to_move = x->target_position - x->current_position;
     y->steps_to_move = y->target_position - y->current_position;
     z->steps_to_move = z->target_position - z->current_position;
-    
-    if (x->steps_to_move != 0) {
-        gpio_put(x->dir_pin, x->steps_to_move > 0);  // Set direction
-        step_motor(x->step_pin, abs(x->steps_to_move), STEP_SLEEP);  // Move motor
-        x->current_position = x->target_position;
 
-        char message[50];
-        snprintf(message, sizeof(message), "Moved to position: %d\n", x->current_position);
-        print_output(message);
-        //uart_puts(UART_ID, message);
-    } else {
+    // Do nothing if already at position
+    if (x->steps_to_move == 0 && y->steps_to_move == 0 && z->steps_to_move == 0)
+    {
         print_output("Already at the target position.\n");
-        //uart_puts(UART_ID, "Already at the target position.\n");
+        return;
     }
     
+    // Do z motor first
+    if (z->steps_to_move != 0)
+    {
+        gpio_put(z->dir_pin, z->steps_to_move > 0);  // Set direction
+        step_motor(z->step_pin, abs(z->steps_to_move), STEP_SLEEP);  // Move motor
+        z->current_position = z->target_position;
+
+        char message[50];
+        snprintf(message, sizeof(message), "Moved to position: %d\n", z->current_position);
+        print_output(message);
+    }
+    
+    // Find maximum steps out of x and y axis
+    int max_steps = abs((x->steps_to_move > y->steps_to_move) ? x->steps_to_move : y->steps_to_move);
+    
+    // Set direction
+    gpio_put(x->dir_pin, x->steps_to_move > 0);  
+    gpio_put(y->dir_pin, y->steps_to_move > 0);
+
+    x->steps_to_move = abs(x->steps_to_move);
+    y->steps_to_move = abs(y->steps_to_move);
+    
+    // Do x and y motors simultaneously
+    for (int i = 0; i < max_steps; i++) {
+        // Turn x stepper motor on
+        if (i < x->steps_to_move)
+        {
+            gpio_put(x->step_pin, true);
+        }
+        // Turn y stepper motor on
+        if (i < y->steps_to_move)
+        {
+            gpio_put(y->step_pin, true);
+        }
+        // Turn motor off after a duration
+        sleep_us(STEP_SLEEP);
+        gpio_put(x->step_pin, false);
+        gpio_put(y->step_pin, false);
+        sleep_us(STEP_SLEEP);
+        
+        //step_motor(x->step_pin, abs(x->steps_to_move), STEP_SLEEP);  // Move motor
+        x->current_position = x->target_position;
+        y->current_position = y->target_position;
+
+        
+    } 
+    char message[50];
+    snprintf(message, sizeof(message), "Moved to position: x %d, y %d\n", x->current_position, y->current_position);
+    print_output(message);
 }
 
 /*
@@ -590,7 +633,7 @@ int main(void) {
                 x.target_position = 0;
                 y.target_position = 0;
                 z.target_position = 0;
-                //move_to_position(x, y, z);
+                move_to_position(&x, &y, &z);
                 x.current_position = x.target_position;
                 y.current_position = y.target_position;
                 z.current_position = z.target_position;
@@ -609,7 +652,7 @@ int main(void) {
                 break;
             case 'y':
                 sscanf(argument, "%d", &y.target_position);
-                //move_to_position(x, y, z);
+                move_to_position(&x, &y, &z);
                 coords[0] = x.current_position;
                 coords[1] = y.current_position;
                 coords[2] = z.current_position;
@@ -617,7 +660,7 @@ int main(void) {
                 break;
             case 'z':
                 sscanf(argument, "%d", &z.target_position);
-                //move_to_position(x, y, z);
+                move_to_position(&x, &y, &z);
                 int temp_coords[3] = {x.current_position, y.current_position, z.current_position};
                 print_coords(coords);
                 break;
