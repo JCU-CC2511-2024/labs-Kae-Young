@@ -78,9 +78,12 @@
 
 #define MIN_POSITION 0
 #define X_MAX 8000
-#define Y_MAX 5000 //2200
+#define Y_MAX 5450
 #define Z_MAX 1800
 #define STEP_SLEEP 800
+
+
+#define LEN(arr) ((int) (sizeof (arr) / sizeof (arr)[0]))   //LEN(arr) for number of rows //LEN(arr[0]) for number of columns
 
 /* 
 ################################################################
@@ -215,9 +218,10 @@ const int coord_text_height = 3;
 // Print coordinates
 void print_coords(int coords[]) {
     int normalised_coords[3];
+    int limits[3] = {X_MAX, Y_MAX, Z_MAX};
      for (int i = 0; i < 3; i++)
     {
-        normalised_coords[i] = round(((double)coords[i]/(double)X_MAX)*100);    //wrong max value
+        normalised_coords[i] = round(((double)coords[i]/(double)limits[i])*100);    //wrong max value
     }
     
     term_set_color(clrGreen, clrBlack);
@@ -421,6 +425,31 @@ axis_T x;
 axis_T y;
 axis_T z;
 
+void move_z_motor(axis_T* z)    {
+    // Set direction
+    gpio_put(z->dir_pin, z->steps_to_move > 0);  
+        
+    // Disregard sign
+    z->steps_to_move = abs(z->steps_to_move);
+
+    // Move motor
+    for (int i = 0; i < z->steps_to_move; i++) {
+        gpio_put(z->step_pin, true);
+        sleep_us(STEP_SLEEP);
+        gpio_put(z->step_pin, false);
+        sleep_us(STEP_SLEEP);
+    }
+
+    // Set current position to original target position
+    z->current_position = z->target_position;
+    z->steps_to_move = 0;
+
+    // Output message
+    char message[50];
+    snprintf(message, sizeof(message), "Moved to position: %d\n", z->current_position);
+    print_output(message);
+}
+
 // Generalized function to move motor to a target position
 void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     if (x->target_position < x->min_position || x->target_position > x->max_position) {
@@ -449,30 +478,10 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
         return;
     }
     
-    // Do z motor first
-    if (z->steps_to_move != 0)
+    // Do z motor first if raising spindle
+    if (z->steps_to_move != 0 & z->current_position != 0)
     {
-        // Set direction
-        gpio_put(z->dir_pin, z->steps_to_move > 0);  
-        
-        // Disregard sign
-        z->steps_to_move = abs(z->steps_to_move);
-
-        // Move motor
-        for (int i = 0; i < z->steps_to_move; i++) {
-            gpio_put(z->step_pin, true);
-            sleep_us(STEP_SLEEP);
-            gpio_put(z->step_pin, false);
-            sleep_us(STEP_SLEEP);
-        }
-
-        // Set current position to original target position
-        z->current_position = z->target_position;
-
-        // Output message
-        char message[50];
-        snprintf(message, sizeof(message), "Moved to position: %d\n", z->current_position);
-        print_output(message);
+        move_z_motor(z);
     }
     
     // Set direction
@@ -542,10 +551,31 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     // Set current position to original target position
     x->current_position = x->target_position;
     y->current_position = y->target_position;
+
+    // Set steps to move to 0
+    x->steps_to_move = 0;
+    y->steps_to_move = 0;
     
+    // Do z motor last if lowering spindle
+    if (z->steps_to_move != 0 & z->current_position == 0)
+    {
+        move_z_motor(z);
+    }
+
     char message[50];
-    snprintf(message, sizeof(message), "Moved to position: x %d, y %d\n", x->current_position, y->current_position);
+    snprintf(message, sizeof(message), "Moved to position: x %d, y %d, z %d\n", x->current_position, y->current_position, z->current_position);
     print_output(message);
+}
+
+void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y, axis_T* z)    {
+    for (int i = 0; i < sequence_length; i++)
+    {
+        x->target_position = sequence[i][0];
+        y->target_position = sequence[i][1];
+        z->target_position = sequence[i][2];
+
+        move_to_position(x, y, z);
+    }
 }
 
 /*
@@ -612,8 +642,36 @@ int main(void) {
     z.step_pin = STEP_PIN_Z;
     z.dir_pin = DIR_PIN_Z;
 
+    int z_down = 1470;
+    int z_up = 0;
+
+    /*
+    ############################################################
+                        Define Sequences
+    ############################################################
+    */
+    // define house
+    const int house[][3] = {
+        {1000, 0, z_down},
+        {5000, 0, z_down},
+        {5000, 2000, z_down},
+        {6000, 2000, z_down},
+        {3000, 4000, z_down},
+        {0, 2000, z_down},
+        {1000, 2000, z_down},
+        {1000, 0, z_down},
+        {0, 0, z_up}
+    };
+
+    /*
+    ############################################################
+                      End Sequence Definition
+    ############################################################
+    */
+
     // Initialize coordinate array
     volatile int coords[] = {x.current_position, y.current_position, z.current_position};
+
     while (true) {
         // Wait for input
         while (!input_ready) {
@@ -622,16 +680,21 @@ int main(void) {
         // Process input
         char command = '\0';
         char argument[20];
+        
 
         int input = sscanf(buffer, "%c %s", &command, &argument);
 
         switch (command)
         {
             case 'M':   // Manual control
-                /* code */
+
                 break;
+
             case 'L':   // Load
+                print_sequence(house, LEN(house), &x, &y, &z);
+                print_output("Sequence: house, completed");
                 break;
+                
             case 'Z':   // Zero coordinates
                 x.current_position = 0;
                 y.current_position = 0;
@@ -642,10 +705,12 @@ int main(void) {
                 coords[2] = z.current_position;
                 print_coords(coords);
                 break;
+
             case 'R':
                 clear_ui();
                 draw_ui();
                 break;
+
             case 'H':
                 x.target_position = 0;
                 y.target_position = 0;
@@ -659,6 +724,7 @@ int main(void) {
                 coords[2] = z.current_position;
                 print_coords(coords);
                 break;
+
             case 'x':
                 sscanf(argument, "%d", &x.target_position);
                 move_to_position(&x, &y, &z);
@@ -667,6 +733,7 @@ int main(void) {
                 coords[2] = z.current_position;
                 print_coords(coords);
                 break;
+
             case 'y':
                 sscanf(argument, "%d", &y.target_position);
                 move_to_position(&x, &y, &z);
@@ -675,6 +742,7 @@ int main(void) {
                 coords[2] = z.current_position;
                 print_coords(coords);
                 break;
+
             case 'z':
                 sscanf(argument, "%d", &z.target_position);
                 move_to_position(&x, &y, &z);
@@ -683,6 +751,7 @@ int main(void) {
                 coords[2] = z.current_position;
                 print_coords(coords);
                 break;
+
             default:
                 print_output("Invalid command.");
                 clr_input(in_box);
