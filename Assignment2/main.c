@@ -500,22 +500,36 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     double dx = (double)x->steps_to_move/num_of_increments;
     double dy = (double)y->steps_to_move/num_of_increments;
 
-    // Find maximum steps out of x and y axis
-    int max_steps = (dx > dy) ? dx : dy;
+    
 
-    for (int j = 0; j < (int)num_of_increments; j++)
+    double last_x_position = 0;
+    double last_y_position = 0;
+
+    for (int N = 0; N < (int)num_of_increments; N++)
     {
+        double target_x_position = N*dx;
+        double target_y_position = N*dy;
+
+        int actual_dx = round(target_x_position - last_x_position);
+        int actual_dy = round(target_y_position - last_y_position);
+
+        last_x_position = last_x_position + actual_dx;
+        last_y_position = last_y_position + actual_dy;
+
+        // Find maximum steps out of x and y axis
+        int max_steps = MAX(actual_dx, actual_dy);
+
         // Move x and y motors simultaneously
         for (int i = 0; i < max_steps; i++) {
             // Turn x stepper motor on
-            if (i < dx)
+            if (i < actual_dx)
             {
-                gpio_put(dx, true);
+                gpio_put(x->step_pin, true);
             }
             // Turn y stepper motor on
-            if (i < dy)
+            if (i < actual_dy)
             {
-                gpio_put(dy, true);
+                gpio_put(y->step_pin, true);
             }
             // Turn motor off after a duration
             sleep_us(STEP_SLEEP);
