@@ -77,9 +77,9 @@
 #define RESET_PIN   18
 
 #define MIN_POSITION 0
-#define X_MAX 5000
+#define X_MAX 8000
 #define Y_MAX 5000 //2200
-#define Z_MAX 2000 
+#define Z_MAX 1800
 #define STEP_SLEEP 800
 
 /* 
@@ -88,8 +88,6 @@
 ################################################################                                             
 */
 // UI box struct contains height and width information
-// Get box width from box.width
-// Get box height from box.height
 typedef struct box {
     int width;
     int height;
@@ -251,8 +249,8 @@ void draw_ui()  {
     // TIP: UI works better when width and height are multiples of 9
     win_box.width = 150;                        //set box width
     win_box.height = 25;                        //set box height
-    win_box.x_origin = 1;                       //set box x origin
-    win_box.y_origin = 1;                       //set box y origin
+    win_box.x_origin = 5;                       //set box x origin
+    win_box.y_origin = 5;                       //set box y origin
     win_box.header = "CC2511 Assignment 2";     //set box header
     win_box.is_heading_centered = true;         //set heading alignment
 
@@ -265,15 +263,15 @@ void draw_ui()  {
     // Configure xyz box
     xyz_box.width = round(2*x_grid_step);
     xyz_box.height = round(3*y_grid_step);
-    xyz_box.x_origin = round(1*x_grid_step);
-    xyz_box.y_origin = round(1*y_grid_step);
+    xyz_box.x_origin = win_box.x_origin + round(1*x_grid_step);
+    xyz_box.y_origin = win_box.y_origin + round(1*y_grid_step);
     xyz_box.header = "Coordinates";
     xyz_box.is_heading_centered = true;
 
     // Configure options box
     opt_box.width = round(4*x_grid_step);
     opt_box.height = xyz_box.height;                                  //equal height as xyz_box
-    opt_box.x_origin = round(win_box.width - x_grid_step - opt_box.width);   //equal width as xyz_box
+    opt_box.x_origin = win_box.x_origin + round(win_box.width - x_grid_step - opt_box.width);   //equal width as xyz_box
     opt_box.y_origin = xyz_box.y_origin;                              //vertically aligned with xyz_box
     opt_box.header = "Options";
     opt_box.is_heading_centered = true;
@@ -281,8 +279,8 @@ void draw_ui()  {
     // Configure input box
     in_box.width = round(xyz_box.width + opt_box.width + x_grid_step);     //same width as left of xyz_box to right of opt_box
     in_box.height = round(1.5*y_grid_step);                                  
-    in_box.x_origin = round(xyz_box.x_origin);                             //aligned horizontally with xyz_box
-    in_box.y_origin = round(xyz_box.height + 2*y_grid_step);                    
+    in_box.x_origin = xyz_box.x_origin;                                     //aligned horizontally with xyz_box
+    in_box.y_origin = win_box.y_origin + round(xyz_box.height + 2*y_grid_step);                    
     in_box.header = "Input";
     in_box.is_heading_centered = false;
 
@@ -413,7 +411,7 @@ typedef struct axis {
     int target_position;
     int min_position;
     int max_position;
-    int steps_to_move;
+    int steps_to_move; 
     uint step_pin;
     uint dir_pin;
 } axis_T;
@@ -423,46 +421,20 @@ axis_T x;
 axis_T y;
 axis_T z;
 
-// Generalized motor stepping function
-void step_motor(uint step_pin, int steps, int delay_us) {
-    for (int i = 0; i < steps; i++) {
-        gpio_put(step_pin, true);
-        sleep_us(delay_us);
-        gpio_put(step_pin, false);
-        sleep_us(delay_us);
-    }
-}
-
 // Generalized function to move motor to a target position
 void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
-    for (int i = 0; i < 3; i++)
-    {
-        switch (i)
-        {
-        case 0:
-            if (x->target_position < x->min_position || x->target_position > x->max_position) {
-                uart_puts(UART_ID, "Error: x position out of bounds.\n");
-                return;
-            }
-            break;
-
-        case 1:
-            if (y->target_position < y->min_position || y->target_position > y->max_position) {
-                uart_puts(UART_ID, "Error: y position out of bounds.\n");
-                return;
-            }
-            break;
-
-        case 2:
-            if (z->target_position < z->min_position || z->target_position > z->max_position) {
-                uart_puts(UART_ID, "Error: z position out of bounds.\n");
-                return;
-            }
-            break;
-        
-        default:
-            break;
-        }
+    if (x->target_position < x->min_position || x->target_position > x->max_position) {
+        //char message[] = 
+        print_output("Error: x position out of bounds (0-).\n");
+        return;
+    }
+    if (y->target_position < y->min_position || y->target_position > y->max_position) {
+        print_output("Error: x position out of bounds (0-).\n");
+        return;
+    }
+    if (z->target_position < z->min_position || z->target_position > z->max_position) {
+        print_output("Error: x position out of bounds (0-).\n");
+        return;
     }
 
     // Calculate steps to move
@@ -480,49 +452,83 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     // Do z motor first
     if (z->steps_to_move != 0)
     {
-        gpio_put(z->dir_pin, z->steps_to_move > 0);  // Set direction
-        step_motor(z->step_pin, abs(z->steps_to_move), STEP_SLEEP);  // Move motor
+        // Set direction
+        gpio_put(z->dir_pin, z->steps_to_move > 0);  
+        
+        // Disregard sign
+        z->steps_to_move = abs(z->steps_to_move);
+
+        // Move motor
+        for (int i = 0; i < z->steps_to_move; i++) {
+            gpio_put(z->step_pin, true);
+            sleep_us(STEP_SLEEP);
+            gpio_put(z->step_pin, false);
+            sleep_us(STEP_SLEEP);
+        }
+
+        // Set current position to original target position
         z->current_position = z->target_position;
 
+        // Output message
         char message[50];
         snprintf(message, sizeof(message), "Moved to position: %d\n", z->current_position);
         print_output(message);
     }
     
-    // Find maximum steps out of x and y axis
-    int max_steps = abs((x->steps_to_move > y->steps_to_move) ? x->steps_to_move : y->steps_to_move);
-    
     // Set direction
     gpio_put(x->dir_pin, x->steps_to_move > 0);  
     gpio_put(y->dir_pin, y->steps_to_move > 0);
 
+    // Disregard sign
     x->steps_to_move = abs(x->steps_to_move);
     y->steps_to_move = abs(y->steps_to_move);
-    
-    // Do x and y motors simultaneously
-    for (int i = 0; i < max_steps; i++) {
-        // Turn x stepper motor on
-        if (i < x->steps_to_move)
-        {
-            gpio_put(x->step_pin, true);
-        }
-        // Turn y stepper motor on
-        if (i < y->steps_to_move)
-        {
-            gpio_put(y->step_pin, true);
-        }
-        // Turn motor off after a duration
-        sleep_us(STEP_SLEEP);
-        gpio_put(x->step_pin, false);
-        gpio_put(y->step_pin, false);
-        sleep_us(STEP_SLEEP);
-        
-        //step_motor(x->step_pin, abs(x->steps_to_move), STEP_SLEEP);  // Move motor
-        x->current_position = x->target_position;
-        y->current_position = y->target_position;
 
-        
-    } 
+    // N = MIN(delta_x, delta_y)/MIN_STEP
+    double num_of_increments;
+    if (x->steps_to_move == 0)
+    {
+        num_of_increments = y->steps_to_move;
+    }
+    else if (y->steps_to_move == 0)
+    {
+        num_of_increments = x->steps_to_move;
+    }
+    else    {
+        num_of_increments = MIN(x->steps_to_move, y->steps_to_move);
+    }
+
+    double dx = (double)x->steps_to_move/num_of_increments;
+    double dy = (double)y->steps_to_move/num_of_increments;
+
+    // Find maximum steps out of x and y axis
+    int max_steps = (dx > dy) ? dx : dy;
+
+    for (int j = 0; j < (int)num_of_increments; j++)
+    {
+        // Move x and y motors simultaneously
+        for (int i = 0; i < max_steps; i++) {
+            // Turn x stepper motor on
+            if (i < dx)
+            {
+                gpio_put(dx, true);
+            }
+            // Turn y stepper motor on
+            if (i < dy)
+            {
+                gpio_put(dy, true);
+            }
+            // Turn motor off after a duration
+            sleep_us(STEP_SLEEP);
+            gpio_put(x->step_pin, false);
+            gpio_put(y->step_pin, false);
+            sleep_us(STEP_SLEEP);
+        } 
+    }
+    
+    // Set current position to original target position
+    x->current_position = x->target_position;
+    y->current_position = y->target_position;
+    
     char message[50];
     snprintf(message, sizeof(message), "Moved to position: x %d, y %d\n", x->current_position, y->current_position);
     print_output(message);
@@ -569,8 +575,6 @@ int main(void) {
     int x_steps = 0;
 
     draw_ui();
-    
-    //uart_puts(UART_ID, "Ready for commands...\n");
 
     // define axes attributes
     x.max_position = X_MAX;
@@ -596,8 +600,7 @@ int main(void) {
 
     // Initialize coordinate array
     volatile int coords[] = {x.current_position, y.current_position, z.current_position};
-
-     while (true) {
+    while (true) {
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
@@ -661,11 +664,13 @@ int main(void) {
             case 'z':
                 sscanf(argument, "%d", &z.target_position);
                 move_to_position(&x, &y, &z);
-                int temp_coords[3] = {x.current_position, y.current_position, z.current_position};
+                coords[0] = x.current_position;
+                coords[1] = y.current_position;
+                coords[2] = z.current_position;
                 print_coords(coords);
                 break;
             default:
-                print_output("Invalid command. Enter a valid position (0-5000).");
+                print_output("Invalid command.");
                 clr_input(in_box);
                 break;
         }
