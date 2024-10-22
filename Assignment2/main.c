@@ -82,6 +82,8 @@
 #define Z_MAX 1800
 #define STEP_SLEEP 800
 
+#define SPINDLE 22
+
 
 #define LEN(arr) ((int) (sizeof (arr) / sizeof (arr)[0]))   //LEN(arr) for number of rows //LEN(arr[0]) for number of columns
 
@@ -578,6 +580,19 @@ void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y
     }
 }
 
+void setup_pwm() {
+    gpio_set_function(SPINDLE, GPIO_FUNC_PWM);
+    uint spindle_slice_num = pwm_gpio_to_slice_num(SPINDLE);
+    int spindle_speed = 0;
+    pwm_set_wrap(spindle_slice_num, 255);
+    pwm_set_gpio_level(SPINDLE, spindle_speed);
+    pwm_set_enabled(spindle_slice_num, spindle_speed);
+}
+
+void spindle_on(int spindle_speed) {
+    pwm_set_gpio_level(SPINDLE, spindle_speed);
+}
+
 /*
 #################################################################
                             Main
@@ -619,6 +634,9 @@ int main(void) {
     int x_steps = 0;
 
     draw_ui();
+
+    setup_pwm();
+    spindle_on(0);
 
     // define axes attributes
     x.max_position = X_MAX;
@@ -673,6 +691,7 @@ int main(void) {
     volatile int coords[] = {x.current_position, y.current_position, z.current_position};
 
     while (true) {
+        spindle_on(255);
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
