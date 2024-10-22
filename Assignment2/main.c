@@ -683,7 +683,7 @@ int main(void) {
     z.step_pin = STEP_PIN_Z;
     z.dir_pin = DIR_PIN_Z;
 
-    int z_down = 1540;
+    int z_down = 1000;
     int z_up = z_down - 200;
 
     /*
