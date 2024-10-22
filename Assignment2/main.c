@@ -83,6 +83,7 @@
 #define STEP_SLEEP 800
 
 #define SPINDLE 22
+#define SPIN_MAX 255
 
 
 #define LEN(arr) ((int) (sizeof (arr) / sizeof (arr)[0]))   //LEN(arr) for number of rows //LEN(arr[0]) for number of columns
@@ -310,7 +311,7 @@ void draw_ui()  {
 
     // Draw options box contents
     
-    char options[6][26] = {"move - manual control", "home - move to [0 0 0]", "load - load prefab", "zero - set to [0 0 0]", "setz - set spindle height", "resize - resize Window"};
+    char options[7][26] = {"move - manual control", "home - move to [0 0 0]", "load - load prefab", "zero - set to [0 0 0]", "setz - set spindle height", "resize - resize Window", "spin - set spindle on/off"};
     int num_of_options = LEN(options);
     int max_length = LEN(options[0]);
     x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
@@ -649,7 +650,7 @@ int main(void) {
     // Configure window box
     // TIP: UI works better when width and height are multiples of 9
     win_box.width = 150;                        //set box width
-    win_box.height = 30;                        //set box height
+    win_box.height = 33;                        //set box height
     win_box.x_origin = 5;                       //set box x origin
     win_box.y_origin = 5;                       //set box y origin
     win_box.header = "CC2511 Assignment 2";     //set box header
@@ -739,10 +740,12 @@ int main(void) {
     // Initialize coordinate array
     volatile int coords[] = {x.current_position, y.current_position, z.current_position};
 
+    // Initialize spindle speed
+    int spindle_speed = 0;
     
 
     while (true) {
-        spindle_on(255);
+        spindle_on(spindle_speed);
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
@@ -754,6 +757,7 @@ int main(void) {
         char option_resize[20] = "resize";
         char option_home[20] = "home";
         char option_setz[20] = "setz";
+        char option_spin[20] = "spin";
         // Process input
         char command[20] = "\000";
         char argument[20] = "\000";
@@ -909,7 +913,40 @@ int main(void) {
                 }
             }
         }
-        
+        else if (strcmp(command, option_spin) == 0)
+        {
+            // Set temp speed
+            int speed = 9999;
+
+            // Process input
+            input = sscanf(argument, "%d", &speed);
+
+            // Check if speed has been changed
+            if (speed == 9999)
+            {
+                // If unchanged show user the correct syntax
+                char message[50];
+                sprintf(message, "Syntax: \"spin [speed]\"", SPIN_MAX);
+                print_output(message);
+            }
+            else if (speed < 0 || speed > SPIN_MAX)
+            {
+                // If speed is out of bounds show error message
+                char message[50];
+                sprintf(message, "Error: spindle speed out of bounds (0-%d)", SPIN_MAX);
+                print_output(message);
+            }
+            
+            else
+            {
+                // If changed set spindle speed
+                spindle_speed = speed;
+                char message[50];
+                sprintf(message, "Spindle speed set to %d", spindle_speed);
+                print_output(message);
+            } 
+        }
+        // INVALID COMMAND
         else
         {
             print_output("Invalid command.");
@@ -921,101 +958,6 @@ int main(void) {
             command[i] = "\000";
             argument[i] = "\000";
         }
-
-        /*
-        switch (command)
-        {
-            case 'M':   // Manual control
-
-                break;
-
-            case 'L':   // Load
-                input = sscanf(argument, "%s", &sequence);
-                if (sequence == "house")
-                {
-                    print_output("stop"); 
-                }
-                
-                print_sequence(house, LEN(house), &x, &y, &z);
-                print_output("Sequence: house, completed");
-                break;
-                
-            case 'Z':   // Zero coordinates
-                x.current_position = 0;
-                y.current_position = 0;
-                z.current_position = 0;
-                print_output("Coordinates zeroed");
-                coords[0] = x.current_position;
-                coords[1] = y.current_position;
-                coords[2] = z.current_position;
-                print_coords(coords);
-                break;
-
-            case 'R':
-                clear_ui();
-                draw_ui();
-                break;
-
-            case 'H':
-                x.target_position = 0;
-                y.target_position = 0;
-                z.target_position = 0;
-                move_to_position(&x, &y, &z);
-                x.current_position = x.target_position;
-                y.current_position = y.target_position;
-                z.current_position = z.target_position;
-                coords[0] = x.current_position;
-                coords[1] = y.current_position;
-                coords[2] = z.current_position;
-                print_coords(coords);
-                break;
-
-            case 'x':
-                sscanf(argument, "%d", &x.target_position);
-                move_to_position(&x, &y, &z);
-                coords[0] = x.current_position;
-                coords[1] = y.current_position;
-                coords[2] = z.current_position;
-                print_coords(coords);
-                break;
-
-            case 'y':
-                sscanf(argument, "%d", &y.target_position);
-                move_to_position(&x, &y, &z);
-                coords[0] = x.current_position;
-                coords[1] = y.current_position;
-                coords[2] = z.current_position;
-                print_coords(coords);
-                break;
-
-            case 'z':
-                sscanf(argument, "%d", &z.target_position);
-                move_to_position(&x, &y, &z);
-                coords[0] = x.current_position;
-                coords[1] = y.current_position;
-                coords[2] = z.current_position;
-                print_coords(coords);
-                break;
-
-            default:
-                print_output("Invalid command.");
-                clr_input(in_box);
-                break;
-        }
-        */
-        /*
-        if (sscanf(buffer, "x %d", &x_target_position) == 1) {
-            move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
-        } else if (sscanf(buffer, "y %d", &y_target_position) == 1) {
-            move_to_position(&y_current_position, y_target_position, STEP_PIN_Y, DIR_PIN_Y, Y_MAX);
-        } else if (sscanf(buffer, "z %d", &z_target_position) == 1) {
-            move_to_position(&z_current_position, z_target_position, STEP_PIN_Z, DIR_PIN_Z, Z_MAX);
-        } else {
-            print_output("Invalid command. Enter a valid position (0-5000).");
-            clr_input(in_box);
-            //uart_puts(UART_ID, "Invalid command. Enter a valid position (0-5000).\n");
-        }
-        */
 
         input_ready = false;  // Reset input flag
     }
