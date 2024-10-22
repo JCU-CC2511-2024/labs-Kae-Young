@@ -108,7 +108,7 @@ box_T in_box;
 box_T out_box;
 
 void clear_ui() {
-    term_move_to(1,1);
+    term_move_to(win_box.x_origin,win_box.y_origin);
     term_set_color(clrBlack, clrBlack);
     for (int i = 0; i < win_box.height + 1; i++)
     {
@@ -249,15 +249,6 @@ void print_coords(int coords[]) {
 
 // Draw UI
 void draw_ui()  {
-    // Configure window box
-    // TIP: UI works better when width and height are multiples of 9
-    win_box.width = 150;                        //set box width
-    win_box.height = 25;                        //set box height
-    win_box.x_origin = 5;                       //set box x origin
-    win_box.y_origin = 5;                       //set box y origin
-    win_box.header = "CC2511 Assignment 2";     //set box header
-    win_box.is_heading_centered = true;         //set heading alignment
-
     //the window is made up of a 9x9 grid
     double width = win_box.width;
     double height = win_box.height;
@@ -317,12 +308,12 @@ void draw_ui()  {
 
     // Draw options box contents
     
-    static int num_of_options = 5;
-    static int max_length = 23;
-    char options[4][24] = {"M - Manual Control", "L - Load File", "Z - Zero System", "R - Resize Window"};
+    char options[6][26] = {"move - manual control", "home - move to [0 0 0]", "load - load prefab", "zero - set to [0 0 0]", "setz - set spindle height", "resize - resize Window"};
+    int num_of_options = LEN(options);
+    int max_length = LEN(options[0]);
     x_cursor = round(((opt_box.width+2) - max_length)/2 + opt_box.x_origin);
     y_cursor = round(((opt_box.height+2) - num_of_options)/2 + opt_box.y_origin);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < num_of_options; i++)
     {
       term_move_to(x_cursor, y_cursor + i);
       printf(options[i]);
@@ -453,16 +444,21 @@ void move_z_motor(axis_T* z)    {
 // Generalized function to move motor to a target position
 void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     if (x->target_position < x->min_position || x->target_position > x->max_position) {
-        //char message[] = 
-        print_output("Error: x position out of bounds (0-).\n");
+        char message[50];
+        sprintf(message, "Error: x position out of bounds (0-%d).", X_MAX);
+        print_output(message);
         return;
     }
     if (y->target_position < y->min_position || y->target_position > y->max_position) {
-        print_output("Error: x position out of bounds (0-).\n");
+        char message[50];
+        sprintf(message, "Error: y position out of bounds (0-%d).", Y_MAX);
+        print_output(message);
         return;
     }
     if (z->target_position < z->min_position || z->target_position > z->max_position) {
-        print_output("Error: x position out of bounds (0-).\n");
+        char message[50];
+        sprintf(message, "Error: z position out of bounds (0-%d).", Z_MAX);
+        print_output(message);
         return;
     }
 
@@ -482,6 +478,8 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     if (z->steps_to_move != 0 & z->current_position != 0)
     {
         move_z_motor(z);
+        // Set current position to original target position
+        z->current_position = z->target_position;
     }
     
     // Set direction
@@ -560,6 +558,8 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     if (z->steps_to_move != 0 & z->current_position == 0)
     {
         move_z_motor(z);
+        // Set current position to original target position
+        z->current_position = z->target_position;
     }
 
     char message[50];
@@ -575,9 +575,22 @@ void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y
         z->target_position = sequence[i][2];
 
         move_to_position(x, y, z);
+        int coords[3];
+        coords[0] = x->current_position;
+        coords[1] = y->current_position;
+        coords[2] = z->current_position;
+        print_coords(coords);
     }
 }
 
+int len_of_text(char arr[]) {
+    int i = 0;
+    while (arr[i] != '\000')
+    {
+        i++;
+    }
+    return i;
+}
 /*
 #################################################################
                             Main
@@ -618,6 +631,15 @@ int main(void) {
 
     int x_steps = 0;
 
+    // Configure window box
+    // TIP: UI works better when width and height are multiples of 9
+    win_box.width = 150;                        //set box width
+    win_box.height = 30;                        //set box height
+    win_box.x_origin = 5;                       //set box x origin
+    win_box.y_origin = 5;                       //set box y origin
+    win_box.header = "CC2511 Assignment 2";     //set box header
+    win_box.is_heading_centered = true;         //set heading alignment
+
     draw_ui();
 
     // define axes attributes
@@ -642,8 +664,8 @@ int main(void) {
     z.step_pin = STEP_PIN_Z;
     z.dir_pin = DIR_PIN_Z;
 
-    int z_down = 1470;
-    int z_up = 0;
+    int z_down = 1540;
+    int z_up = z_down - 200;
 
     /*
     ############################################################
@@ -652,6 +674,7 @@ int main(void) {
     */
     // define house
     const int house[][3] = {
+        // Outline
         {1000, 0, z_down},
         {5000, 0, z_down},
         {5000, 2000, z_down},
@@ -660,6 +683,32 @@ int main(void) {
         {0, 2000, z_down},
         {1000, 2000, z_down},
         {1000, 0, z_down},
+        //Chimney
+        {1500, 3000, z_up},
+        {1500, 3000, z_down},
+        {1500, 3500, z_down},
+        {1000, 3500, z_down},
+        {1000, 2667, z_down},
+        //Door
+        {3200, 0, z_up},
+        {3200, 0, z_down},
+        {3200, 1600, z_down},
+        {4200, 1600, z_down},
+        {4200, 0, z_down},
+        //Window
+        {1600, 800, z_up},
+        {1600, 800, z_down},
+        {1600, 1600, z_down},
+        {2400, 1600, z_down},
+        {2400, 800, z_down},
+        {1600, 800, z_down},
+        {2000, 800, z_up},
+        {2000, 800, z_down},
+        {2000, 1600, z_down},
+        {1600, 1200, z_up},
+        {1600, 1200, z_down},
+        {2400, 1200, z_down},
+        // Home
         {0, 0, z_up}
     };
 
@@ -672,18 +721,189 @@ int main(void) {
     // Initialize coordinate array
     volatile int coords[] = {x.current_position, y.current_position, z.current_position};
 
+    
+
     while (true) {
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
         }
+        // Store commands
+        char option_move[20] = "move";
+        char option_load[20] = "load";
+        char option_zero[20] = "zero";
+        char option_resize[20] = "resize";
+        char option_home[20] = "home";
+        char option_setz[20] = "setz";
         // Process input
-        char command = '\0';
-        char argument[20];
+        char command[20] = "\000";
+        char argument[20] = "\000";
         
+        int input = sscanf(buffer, "%s %[^\t\n]", &command, &argument);
+        
+        // MANUAL CONTROL
+        if (strcmp(command, option_move) == 0)
+        {
+            // Set temp coord values
+            coords[0] = 9999;
+            coords[1] = 9999;
+            coords[2] = 9999;
 
-        int input = sscanf(buffer, "%c %s", &command, &argument);
+            // Scan input for target coords
+            input = sscanf(argument, "%d %d %d", &coords[0], &coords[1], &coords[2]);
+            
+            // Check if all coords have been set by user
+            if (coords[0] == 9999 || coords[1] == 9999 || coords[2] == 9999)
+            {
+                // If not then show user the correct syntax
+                print_output("Syntax: \"move [x] [y] [z]\"");
+            }
+            else
+            {
+                // If yes then move to target coords
+                x.target_position = coords[0];
+                y.target_position = coords[1];
+                z.target_position = coords[2];
+                move_to_position(&x, &y, &z);
+                print_coords(coords);
+            }
+        }
+        // LOAD
+        else if (strcmp(command, option_load) == 0)
+        {
+            // Store prefab options
+            char option_house[20] = "house";
 
+            // Preallocate prefab option input
+            char sequence[20];
+            input = sscanf(argument, "%s", &sequence);
+
+            // Check prefabs
+            // house
+            if (strcmp(sequence, option_house) == 0)
+            {
+                print_sequence(house, LEN(house), &x, &y, &z);
+                print_output("Sequence: house, completed");
+            }
+            else
+            {
+                print_output("Syntax: \"load [prefab]\". Available prefabs are: house");
+            }
+        }
+        // ZERO
+        else if (strcmp(command, option_zero) == 0)
+        {
+            x.current_position = 0;
+            y.current_position = 0;
+            z.current_position = 0;
+            print_output("Coordinates zeroed");
+            coords[0] = x.current_position;
+            coords[1] = y.current_position;
+            coords[2] = z.current_position;
+            print_coords(coords);
+        }
+        // RESIZE
+        else if (strcmp(command, option_resize) == 0)    
+        {
+            // Set temp window parameters
+            uint width = 9999;
+            uint height = 9999;
+            uint x_origin = 9999;
+            uint y_origin = 9999;
+
+            input = sscanf(argument, "%d %d %d %d", &width, &height, &x_origin, &y_origin);
+
+            // Check if crucial parameters have changed
+            if (width == 9999 || height == 9999)
+            {
+                // If unchanged show user correct syntax
+                print_output("Syntax: \"resize [width] [height] [*x origin] [*y origin]\" *optional");
+            }
+            else
+            {
+                // If changed draw new window
+                clear_ui();
+                win_box.height = height;
+                win_box.width = width;
+
+                // Check if origin points are changed
+                if (x_origin == 9999 || y_origin == 9999)
+                {
+                    // If unchanged default origin to [1, 1]
+                    win_box.x_origin = 1;
+                    win_box.y_origin = 1;
+                }
+                else
+                {
+                    win_box.x_origin = x_origin;
+                    win_box.y_origin = y_origin;
+                }
+                
+                draw_ui();
+            }
+        }
+        // HOME
+        else if (strcmp(command, option_home) == 0)
+        {
+            x.target_position = 0;
+            y.target_position = 0;
+            z.target_position = 0;
+            move_to_position(&x, &y, &z);
+            x.current_position = x.target_position;
+            y.current_position = y.target_position;
+            z.current_position = z.target_position;
+            coords[0] = x.current_position;
+            coords[1] = y.current_position;
+            coords[2] = z.current_position;
+            print_coords(coords);
+        }
+        // SETZ
+        else if (strcmp(command, option_setz) == 0)
+        {
+            // Set temp depth value
+            int depth = 9999;
+
+            input = sscanf(argument, "%d", &depth);
+
+            // Check if depth is unchanged
+            if (depth == 9999)
+            {
+                // If unchanged show user correct syntax
+                print_output("Syntax: \"setz [depth]\"");
+            }
+            else
+            {
+                // If changed check if valid height
+                if ((z.current_position + depth) > Z_MAX)
+                {
+                    char message[50];
+                    sprintf(message, "Error: maximum allowed depth at this height is %d", Z_MAX - z.current_position);
+                    print_output(message);
+                }
+                else
+                {
+                    z_up = z.current_position;
+                    z_down = z_up + depth;
+                    char message[50];
+                    sprintf(message, "Z up set to %d, Z down set to %d", z_up, z_down);
+                    print_output(message);
+                }
+            }
+        }
+        
+        else
+        {
+            print_output("Invalid command.");
+            clr_input(in_box);
+        }
+        
+        for (int i = 0; i < 20; i++)
+        {
+            command[i] = "\000";
+            argument[i] = "\000";
+        }
+
+        /*
         switch (command)
         {
             case 'M':   // Manual control
@@ -691,6 +911,12 @@ int main(void) {
                 break;
 
             case 'L':   // Load
+                input = sscanf(argument, "%s", &sequence);
+                if (sequence == "house")
+                {
+                    print_output("stop"); 
+                }
+                
                 print_sequence(house, LEN(house), &x, &y, &z);
                 print_output("Sequence: house, completed");
                 break;
@@ -757,6 +983,7 @@ int main(void) {
                 clr_input(in_box);
                 break;
         }
+        */
         /*
         if (sscanf(buffer, "x %d", &x_target_position) == 1) {
             move_to_position(&x_current_position, x_target_position, STEP_PIN_X, DIR_PIN_X, X_MAX);
