@@ -79,7 +79,7 @@
 #define MIN_POSITION 0
 #define X_MAX 8000
 #define Y_MAX 5450
-#define Z_MAX 1800
+#define Z_MAX 1800 //350 for spindle //1800 for nothing
 #define STEP_SLEEP 800
 
 #define SPINDLE 22
@@ -217,12 +217,12 @@ void print_output(char output[])  {
 }
 
 const int coord_text_width = 9;
-const int coord_text_height = 3;
+const int coord_text_height = 4;
 // Print coordinates
 void print_coords(int coords[]) {
-    int normalised_coords[3];
-    int limits[3] = {X_MAX, Y_MAX, Z_MAX};
-     for (int i = 0; i < 3; i++)
+    int normalised_coords[4];
+    int limits[4] = {X_MAX, Y_MAX, Z_MAX, SPIN_MAX};
+     for (int i = 0; i < 4; i++)
     {
         normalised_coords[i] = round(((double)coords[i]/(double)limits[i])*100);    //wrong max value
     }
@@ -302,7 +302,7 @@ void draw_ui()  {
     term_set_color(clrGreen, clrBlack);
     int x_cursor = round(((xyz_box.width+2) - coord_text_width)/2 + xyz_box.x_origin);
     int y_cursor = round(((xyz_box.height+2) - coord_text_height)/2 + xyz_box.y_origin);
-    char xyz[] = {'x', 'y', 'z'};
+    char xyz[] = {'x', 'y', 'z', 's'};
     for (int i = 0; i < coord_text_height; i++)
     {
         term_move_to(x_cursor, i + y_cursor);
@@ -323,7 +323,7 @@ void draw_ui()  {
     }
     
     // Print coordinates
-    int zero[3] = {0, 0, 0};
+    int zero[4] = {0, 0, 0, 0};
     print_coords(zero);
 
     // Draw input ready
@@ -570,7 +570,7 @@ void move_to_position(axis_T* x, axis_T* y, axis_T* z) {
     print_output(message);
 }
 
-void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y, axis_T* z)    {
+void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y, axis_T* z, int spindle_speed)    {
     for (int i = 0; i < sequence_length; i++)
     {
         x->target_position = sequence[i][0];
@@ -578,21 +578,20 @@ void print_sequence(int sequence[][3], int sequence_length, axis_T* x, axis_T* y
         z->target_position = sequence[i][2];
 
         move_to_position(x, y, z);
-        int coords[3];
+        int coords[4];
         coords[0] = x->current_position;
         coords[1] = y->current_position;
         coords[2] = z->current_position;
+        coords[3] = spindle_speed;
         print_coords(coords);
     }
 }
 
 void setup_pwm() {
+    gpio_set_dir(SPINDLE, GPIO_OUT);
     gpio_set_function(SPINDLE, GPIO_FUNC_PWM);
     uint spindle_slice_num = pwm_gpio_to_slice_num(SPINDLE);
-    int spindle_speed = 0;
-    pwm_set_wrap(spindle_slice_num, 255);
-    pwm_set_gpio_level(SPINDLE, spindle_speed);
-    pwm_set_enabled(spindle_slice_num, spindle_speed);
+    pwm_set_enabled(spindle_slice_num, true);
 }
 
 void spindle_on(int spindle_speed) {
@@ -683,69 +682,17 @@ int main(void) {
     z.step_pin = STEP_PIN_Z;
     z.dir_pin = DIR_PIN_Z;
 
-    int z_down = 1000;
+    int z_down = 350;
     int z_up = z_down - 200;
-
-    /*
-    ############################################################
-                        Define Sequences
-    ############################################################
-    */
-    // define house
-    const int house[][3] = {
-        // Outline
-        {1000, 0, z_down},
-        {5000, 0, z_down},
-        {5000, 2000, z_down},
-        {6000, 2000, z_down},
-        {3000, 4000, z_down},
-        {0, 2000, z_down},
-        {1000, 2000, z_down},
-        {1000, 0, z_down},
-        //Chimney
-        {1500, 3000, z_up},
-        {1500, 3000, z_down},
-        {1500, 3500, z_down},
-        {1000, 3500, z_down},
-        {1000, 2667, z_down},
-        //Door
-        {3200, 0, z_up},
-        {3200, 0, z_down},
-        {3200, 1600, z_down},
-        {4200, 1600, z_down},
-        {4200, 0, z_down},
-        //Window
-        {1600, 800, z_up},
-        {1600, 800, z_down},
-        {1600, 1600, z_down},
-        {2400, 1600, z_down},
-        {2400, 800, z_down},
-        {1600, 800, z_down},
-        {2000, 800, z_up},
-        {2000, 800, z_down},
-        {2000, 1600, z_down},
-        {1600, 1200, z_up},
-        {1600, 1200, z_down},
-        {2400, 1200, z_down},
-        // Home
-        {0, 0, z_up}
-    };
-
-    /*
-    ############################################################
-                      End Sequence Definition
-    ############################################################
-    */
-
-    // Initialize coordinate array
-    volatile int coords[] = {x.current_position, y.current_position, z.current_position};
 
     // Initialize spindle speed
     int spindle_speed = 0;
-    
+
+    // Initialize coordinate array
+    volatile int coords[] = {x.current_position, y.current_position, z.current_position, spindle_speed};
 
     while (true) {
-        spindle_on(spindle_speed);
+        spindle_on(spindle_speed*spindle_speed);
         // Wait for input
         while (!input_ready) {
             __asm("wfi");  // Wait for interrupt
@@ -771,6 +718,7 @@ int main(void) {
             coords[0] = 9999;
             coords[1] = 9999;
             coords[2] = 9999;
+            coords[3] = spindle_speed;
 
             // Scan input for target coords
             input = sscanf(argument, "%d %d %d", &coords[0], &coords[1], &coords[2]);
@@ -794,8 +742,78 @@ int main(void) {
         // LOAD
         else if (strcmp(command, option_load) == 0)
         {
+            /*
+            ############################################################
+                                Define Sequences
+            ############################################################
+            */
+            // define house
+            const int house[][3] = {
+                // Outline
+                {1000, 0, z_up},    //arive at start position
+                {1000, 0, z_down},
+                {5000, 0, z_down},
+                {5000, 2000, z_down},
+                {6000, 2000, z_down},
+                {3000, 4000, z_down},
+                {0, 2000, z_down},
+                {1000, 2000, z_down},
+                {1000, 0, z_down},
+                //Chimney
+                {1500, 3000, z_up},
+                {1500, 3000, z_down},
+                {1500, 3500, z_down},
+                {1000, 3500, z_down},
+                {1000, 2667, z_down},
+                //Door
+                {3200, 0, z_up},
+                {3200, 0, z_down},
+                {3200, 1600, z_down},
+                {4200, 1600, z_down},
+                {4200, 0, z_down},
+                //Window
+                {1600, 800, z_up},
+                {1600, 800, z_down},
+                {1600, 1600, z_down},
+                {2400, 1600, z_down},
+                {2400, 800, z_down},
+                {1600, 800, z_down},
+                {2000, 800, z_up},
+                {2000, 800, z_down},
+                {2000, 1600, z_down},
+                {1600, 1200, z_up},
+                {1600, 1200, z_down},
+                {2400, 1200, z_down},
+                // Home
+                {0, 0, z_up}
+            };
+
+            const int star[][3] = {
+                {923, 217, z_up},   //arrive at start position
+                {923, 217, z_down},
+                {1334, 1484, z_down},
+                {257, 2266, z_down},
+                {1589, 2266, z_down},
+                {2000, 3533, z_down},
+                {2411, 2266, z_down},
+                {3743, 2266, z_down},
+                {2666, 1484, z_down},
+                {3077, 217, z_down},
+                {2000, 1000, z_down},
+                {923, 217, z_down},
+                // Home
+                {0, 0, z_up}
+            };
+
+            /*
+            ############################################################
+                            End Sequence Definition
+            ############################################################
+            */
+
             // Store prefab options
             char option_house[20] = "house";
+            char option_star[20] = "star";
 
             // Preallocate prefab option input
             char sequence[20];
@@ -805,8 +823,13 @@ int main(void) {
             // house
             if (strcmp(sequence, option_house) == 0)
             {
-                print_sequence(house, LEN(house), &x, &y, &z);
+                print_sequence(house, LEN(house), &x, &y, &z, spindle_speed);
                 print_output("Sequence: house, completed");
+            }
+            if (strcmp(sequence, option_star) == 0)
+            {
+                print_sequence(star, LEN(star), &x, &y, &z, spindle_speed);
+                print_output("Sequence: star, completed");
             }
             else
             {
@@ -823,6 +846,7 @@ int main(void) {
             coords[0] = x.current_position;
             coords[1] = y.current_position;
             coords[2] = z.current_position;
+            coords[3] = spindle_speed;
             print_coords(coords);
         }
         // RESIZE
@@ -878,6 +902,7 @@ int main(void) {
             coords[0] = x.current_position;
             coords[1] = y.current_position;
             coords[2] = z.current_position;
+            coords[3] = spindle_speed;
             print_coords(coords);
         }
         // SETZ
@@ -905,14 +930,15 @@ int main(void) {
                 }
                 else
                 {
-                    z_up = z.current_position;
-                    z_down = z_up + depth;
+                    z_down = z.current_position;
+                    z_up = z_down - depth;
                     char message[50];
                     sprintf(message, "Z up set to %d, Z down set to %d", z_up, z_down);
                     print_output(message);
                 }
             }
         }
+        // SET SPINDLE SPEED
         else if (strcmp(command, option_spin) == 0)
         {
             // Set temp speed
@@ -944,6 +970,11 @@ int main(void) {
                 char message[50];
                 sprintf(message, "Spindle speed set to %d", spindle_speed);
                 print_output(message);
+                coords[0] = x.current_position;
+                coords[1] = y.current_position;
+                coords[2] = z.current_position;
+                coords[3] = spindle_speed;
+                print_coords(coords);
             } 
         }
         // INVALID COMMAND
@@ -960,6 +991,6 @@ int main(void) {
         }
 
         input_ready = false;  // Reset input flag
-        spindle_on(0);
+        //spindle_on(0);
     }
 }
