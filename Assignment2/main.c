@@ -54,9 +54,6 @@
 #define UART_TX_PIN 0
 #define UART_RX_PIN 1
 
-#define UART_TX_PIN 0
-#define UART_RX_PIN 1
-
 //Stepper motors
 #define HOME_PIN_Z  2
 #define STEP_PIN_Z  3 // 3 Z forwards is forwards
@@ -614,7 +611,7 @@ int len_of_text(char arr[]) {
 int main(void) {
     // Initialise components
     stdio_init_all();
-  
+
     // Initialize GPIO pins
     // Initialize GPIO pins
     init_pin(STEP_PIN_X, GPIO_OUT);
