@@ -960,5 +960,6 @@ int main(void) {
         }
 
         input_ready = false;  // Reset input flag
+        spindle_on(0);
     }
 }
