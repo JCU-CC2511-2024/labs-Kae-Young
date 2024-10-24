@@ -829,13 +829,16 @@ int main(void) {
                 print_sequence(star, LEN(star), &x, &y, &z, spindle_speed);
                 print_output("Sequence: star, completed");
             }
+            /*
             else if (strcmp(sequence, option_circle) == 0)
             {
                 
                 int dx = 1;
                 int r = 500;
-                int x_origin = r + 200;
-                int y_origin = r + 200;
+                int x_buffer = 200;
+                int y_buffer = 200;
+                int x_origin = r + x_buffer;
+                int y_origin = r + y_buffer;
                 int N = round(r/dx);
                 int circle[2*N+2][3];
 
@@ -848,7 +851,7 @@ int main(void) {
                 for (int i = 0; i < N; i++)
                 {
                     int circle_x = x_origin - r + (i*dx);
-                    int circle_y = y_origin + round(sqrt((r^2)+(abs((circle_x-x_origin))^2)));   //pythag
+                    int circle_y = y_origin + round(sqrt((r*r)-(x_origin - x_buffer + i*dx)*(x_origin - x_buffer + i*dx)));   //pythag
                     circle[i+1][0] = circle_x;
                     circle[i+1][1] = circle_y;
                     circle[i+1][2] = z_down;
@@ -858,7 +861,7 @@ int main(void) {
                 for (int i = 0; i < N; i++)
                 {
                     int circle_x = x_origin + r - (i*dx);
-                    int circle_y = y_origin - round(sqrt((r^2)+(abs((circle_x-x_origin))^2)));   //pythag
+                    int circle_y = y_origin - round(sqrt((r*r)-(x_origin - x_buffer + i*dx)*(x_origin - x_buffer + i*dx)));   //pythag
                     circle[N+i+1][0] = circle_x;
                     circle[N+i+1][1] = circle_y;
                     circle[N+i+1][2] = z_down;
@@ -872,7 +875,7 @@ int main(void) {
                 print_sequence(circle, LEN(circle), &x, &y, &z, spindle_speed);
                 print_output("Sequence: circle, completed");
             }
-            
+            */
             else
             {
                 print_output("Syntax: \"load [prefab]\". Available prefabs are: house, star, circle");
