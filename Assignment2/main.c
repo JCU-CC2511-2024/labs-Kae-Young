@@ -829,53 +829,6 @@ int main(void) {
                 print_sequence(star, LEN(star), &x, &y, &z, spindle_speed);
                 print_output("Sequence: star, completed");
             }
-            /*
-            else if (strcmp(sequence, option_circle) == 0)
-            {
-                
-                int dx = 1;
-                int r = 500;
-                int x_buffer = 200;
-                int y_buffer = 200;
-                int x_origin = r + x_buffer;
-                int y_origin = r + y_buffer;
-                int N = round(r/dx);
-                int circle[2*N+2][3];
-
-                // arrive at first point of circle
-                circle[0][0] = x_origin - r;
-                circle[0][1] = y_origin;
-                circle[0][2] = z_up;
-
-                // top half of circle
-                for (int i = 0; i < N; i++)
-                {
-                    int circle_x = x_origin - r + (i*dx);
-                    int circle_y = y_origin + round(sqrt((r*r)-(x_origin - x_buffer + i*dx)*(x_origin - x_buffer + i*dx)));   //pythag
-                    circle[i+1][0] = circle_x;
-                    circle[i+1][1] = circle_y;
-                    circle[i+1][2] = z_down;
-                }
-
-                // bottom half of circle
-                for (int i = 0; i < N; i++)
-                {
-                    int circle_x = x_origin + r - (i*dx);
-                    int circle_y = y_origin - round(sqrt((r*r)-(x_origin - x_buffer + i*dx)*(x_origin - x_buffer + i*dx)));   //pythag
-                    circle[N+i+1][0] = circle_x;
-                    circle[N+i+1][1] = circle_y;
-                    circle[N+i+1][2] = z_down;
-                }
-
-                // home
-                circle[2*N+1][0] = 0;
-                circle[2*N+1][1] = 0;
-                circle[2*N+1][2] = z_up;
-
-                print_sequence(circle, LEN(circle), &x, &y, &z, spindle_speed);
-                print_output("Sequence: circle, completed");
-            }
-            */
             else
             {
                 print_output("Syntax: \"load [prefab]\". Available prefabs are: house, star, circle");
