@@ -6,6 +6,14 @@
 
 #include "pico/stdlib.h"
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "hardware/pwm.h"
+#include "hardware/uart.h"
+#include "hardware/irq.h"
+#include <string.h>
+#include "terminal.h"
+#include <math.h>
 
 
 int main(void) {
