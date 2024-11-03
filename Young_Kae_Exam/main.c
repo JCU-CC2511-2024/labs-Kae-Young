@@ -11,9 +11,19 @@
 #include "hardware/pwm.h"
 #include "hardware/uart.h"
 #include "hardware/irq.h"
+#include "hardware/adc.h"
 #include <string.h>
 #include "terminal.h"
 #include <math.h>
+
+//  define pins
+#define LDR_PIN   26
+#define RED_LED   11
+#define GREEN_LED 12
+#define BLUE_LED  13
+#define PUSH_1    2
+#define PUSH_2    3
+#define PUSH_3    4
 
 
 int main(void) {
