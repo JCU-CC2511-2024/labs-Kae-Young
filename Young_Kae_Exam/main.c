@@ -28,7 +28,9 @@
 
 int main(void) {
   // TODO - Initialise components and variables
+  stdio_init_all();
   while (true) {
+    printf("Hello");
     // TODO - Repeated code here
   }
 }
